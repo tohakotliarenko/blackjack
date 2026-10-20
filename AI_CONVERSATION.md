@@ -1,0 +1,2369 @@
+# AI Conversation History — Unleash Blackjack Assignment
+
+**Date:** October 20, 2026  
+**Participants:** Candidate (user) and ChatGPT (GPT-6)  
+**Context:** Technical-assignment analysis, architecture discussion, testing strategy and preparation of project documents.  
+**AI role:** Sparring partner and reviewer; the candidate explicitly requested that the AI **not implement the application on their behalf**.
+
+> **Important accuracy note:** This file is an **organized reconstruction** of the conversation, not a verified verbatim ChatGPT export. The user's substantive prompts are reproduced in full or with the assignment text included by reference in the appendix; long assistant replies are **marked as condensed accounts** instead of being misrepresented as exact quotations. The generated `IMPLEMENTATION_PLAN.md` and `requirements.md` are included in full below as contemporary artifacts. Unleash explicitly requested the **full conversation history**, so an exact export of the chat should be added or used to replace this reconstruction before submission.
+>
+> **Repository filename:** Unleash specifies `AI_CONVERSATION.md` (singular). This record is also available under the requested plural name `AI_CONVERSATIONS.md`.
+
+## Conversation index
+
+1. [Assignment review and initial over-scoped proposal](#1-assignment-review-and-initial-over-scoped-proposal)
+2. [UI-independent domain architecture and game lifecycle](#2-ui-independent-domain-architecture-and-game-lifecycle)
+3. [Interactive play vs. automatic play](#3-interactive-play-vs-automatic-play)
+4. [Confirmation from Unleash: fully autonomous gameplay](#4-confirmation-from-unleash-fully-autonomous-gameplay)
+5. [Player naming and deck exhaustion](#5-player-naming-and-deck-exhaustion)
+6. [Implementation and testing plan](#6-implementation-and-testing-plan)
+7. [Text, Markdown and requirements artifacts](#7-text-markdown-and-requirements-artifacts)
+8. [Conversation compilation request](#8-conversation-compilation-request)
+9. [Appendix A: requirements.md](#appendix-a-requirementsmd)
+10. [Appendix B: IMPLEMENTATION_PLAN.md](#appendix-b-implementation_planmd)
+
+---
+
+## 1. Assignment review and initial over-scoped proposal
+
+### User — opening prompt
+
+> I've started this new chat to work on my test assignment from Unleash as I'm in the hiring process with them.
+>
+> I need to create a Blackjack node app in Typescript.
+>
+> Please act as a sparring partner, do not implement anything instead of my, but rather direct me and give advice.
+>
+> Here are the technical requirements:
+
+The candidate pasted the full assignment specification, reproduced in **Appendix A** from the standalone `requirements.md` prepared during this conversation. This includes the default shuffle endpoint, card values, draw order, winner precedence, required output and GitHub/GitLab reviewer access.
+
+### User — initial analysis notes (verbatim)
+
+```text
+REQUIREMENTS
+- In TypeScript
+- Maintain clear git commit history
+- Include full AI conversation history in AI_CONVERSATION.md
+- Test coverage is must!
+- Writing code yourself in PLUS
+- Remove any redundant AI-generated code
+- Include instructions for how to build/run the project
+- 
+- Craft carefully and with full accountability!
+- Be able to justify decisions and explain design trade offs
+* For Github, access should be granted to users:
+    * – chriswk
+    * – ivarconr
+    * – fredrikoseberg
+    * – sighphyre
+    * – gastonfournier
+    * – kwasniew
+    * – sjaanus
+    * – nunogois
+
+
+EXCERCISE ANALYSIS
+- Game - Black Jack
+- Multiplayer
+    - Exactly 2 players
+        - Question: from the example output is seems like the Dealer is our backend, not a real person.
+            - If so, we may implement and play against the backend first (V1), then potentially multiplayer in V2
+    - Both connect from different sessions, or maybe registration or simply browser fingerprints comparison?
+        - I would perhaps do the easiest browser fingerprint -based auth for V1, then maybe extend it in V2.
+        - If it’s not a multiplayer for V1 it would be enough to simply ask the player’s name and make this game session-unique
+    - You can see both players connected in realtime via websockets, then the button “Start the game” gets unblocked and once BOTH players click play the game starts.
+        - Question: Tech Stack. Would it make sense to create this in a Next.js app + React? For convenience of frontend, routing and pluggable Express? Or maybe simply vite + react + typescript. For V1 don’t really need routing 
+- UI overview
+    - First General welcome page with Create the game button
+    - Then you’re entering the game page with permalink you can share, copy btn.
+    - Once BOTH players are connected and click on start the game button the UI takes them into the gameplay.
+    - Once the game has finished show the pop-up modal with the following output
+        * Winner: Ivar
+        * Dealer | 27 | S7,S10,CJ
+        * Ivar | 19 | D2,H2,C6,H9
+        * And the button for starting over.
+- Gameplay
+    - You draw 2 cards, Dealer draws 2 cards - check for 21 already — Black Jack situation (short-circuit), Dealer has precedence
+    - You draw cards until you get from 17 to 21, if above - Dealer wins.
+    - If you’re in between of 17 and 21 the Dealer draws and you check who’s got more - that person wins.
+- Implementation ideas
+    - Tech stack: React, Nodejs, Express, SQLite - closer to the stack Unleash is using and more conventional . Next.js needed?
+    - Deck generation - host on Cloudflare Workers
+    - Domain models:
+        - Users (id, name, timestamps)
+        - Games (id, timespamps, user_id, status (new, in progress, finished, winner: enum: player, :dealer)
+    - User drop off and reconnection scenario. (V1 or V2?) We could do the start over call if the user got disconnected, anyway iterations are short. Let’s make it simple for the MVP.
+
+- Deck
+    - the app gets the shuffled deck from the url passed as ENV var during app start with fallback to https://sandbox.getunleash.io/blackjack/shuffle
+    - Looks like I need a separate minimalistic node app for deck shuffling.
+    - Question: Where to host it?
+    - If both aren’t available - display the error message
+- Card value calculator
+    - Req: For 2,3,4,5,6,7,8,9,10,J,Q,K,A, — J, Q, K — have a value of 10, while A — 11.
+    - Question: is this ok, that there’s a number card of value 10 and face cards have the same value?
+    - I receive cards with their conventional value that I need to translate according to the requirements
+        - When? - Best in the very beginning to avoid unnecessary dynamic iterators for value mapping
+        - For the very last output I can simply pick the first letter of the suit, and it’s generally a job for UI templates/helpers.
+
+OUTCOMES
+- A separate card-suffling app
+- V1 scope
+    - Deck shuffling app
+    - No real multiplayer
+    - The landing page has the only button to start the game and directly takes you to the gameplay page, but first fetches the deck, if it isn’t available, you’re not starting the game at all - show deck service ins’t available
+    - The gameplay page UI: button to draw a card and the second button “Finish my turn”, it’s only necessary to use it when you’re deliberately decide to stop drawing, otherwise the process should be authomatic.
+- V2 scope
+    - Real multiplayer + some kind of authentication, registration or browser fingerprinting
+    - Drop off and reconnection scenarios
+    - Nicer UI
+    - Greetings for combos and more
+```
+
+### User — evaluation request (verbatim)
+
+```text
+- Evaluate the requirements and my analysis
+- Share your general analysis summary and highlight missing parts
+- Go through the implementation proposal, evaluate the stack, would you recommend staying with Vite + React + Express for both V1 and V2?
+- Analyse the architecture and make proposals
+- Analyse V1 and V2 feature sets and make proposal. Idea: V1 - MVP, core logic. V2 - nice-to-haves
+- Keep the summary concise but informative
+```
+
+### Assistant — response (condensed, not verbatim)
+
+- Highlighted that the proposal significantly exceeded the likely scope: Unleash described a small deterministic game accepting a deck URL on the command line, not an interactive gaming platform.
+- Recommended Node.js + TypeScript + Vitest as a minimal baseline, without React/Express/SQLite/Cloudflare Worker.
+- Identified critical rules: player receives the first two cards, then Dealer; only the initial two-card hand constitutes Blackjack; double Blackjack goes to Dealer; Ace is always 11; Dealer draws on a tie; Player bust takes precedence.
+- Suggested separating the CLI entry point, deck retrieval/validation, deterministic game engine and output formatting.
+- Initially suggested simple types such as `Card`, `Hand` and `GameResult`, later revised through discussion.
+- Recommended comprehensive fixed-deck tests, defensive handling for unavailable/short decks, and precise three-line stdout formatting.
+- Advised prioritizing the requested deliverable over a V2/V3 web application, while recognizing future extensions could be a separate project.
+
+---
+
+## 2. UI-independent domain architecture and game lifecycle
+
+### User — feedback and architecture proposal (verbatim)
+
+> First of all,
+> Unleash did only specify Typescript as a requirement. This means the specific implementation is up to me, the fact nodejs app takes the env var on init doesn't lock the app to be CLI-only.
+> But that's a good point, CLI would be sufficient for the MVP.
+>
+> Let's think of this app as of pregressing feature.
+> CLI is just an inteface, V1 would be CLI, V2 - web UI single player, V3 - web multiplayer.
+> Core logic architecture remains the same.
+>
+> Clarify the idea of domain models you've suggested: `Card`, `Hand`, `GameResult`, I'm not sure we need them. The idea is to keep the logic UI agnostic, easily testable easy to understand (low perceived complexity).
+> About structuring the logic - I would perhaps introduce GameService module which encapsulates the logic. The game is a cycle that executes until there's a winner.
+> The service is created by the factory which creates the required variables as closures.
+> The User model would have a single field - cards: Card[], no model persistence, just a memory object. User instance is instantiated inside of the GameSerivce, no need for DI atm. Game has flow with the following stages: initialDraw, playerDraw, dealerDraw, finish.
+> Each stage can short-circuit to finish. Game is instantiated inside of GameService as well, has phase enum field.
+> GameService instance .play method runs the loop, each iteration executes instructions depending on the current Game.phase. Each iteration ends with resultCheck that updates Game.phase and directs game flow. Communication messages are extracted as templates.
+> Over CLI, the user is asked smt like "Draw initial cards?": y/n/exit. "Draw 1 more card?" y/n/exit.
+> UI interactions should be organized separately from the game logic, propose how exactly.
+>
+> Full or close to full test coverage is a must and comes with V1. I'll provide AI with test scenarios and check the result.
+>
+> Evaluate my approach, make proposals. But please provide strong reasoning if you propose a different logic/app structure.
+
+### Assistant — response (condensed, not verbatim)
+
+- Accepted the CLI/Web UI/multiplayer progression as a plausible product evolution, and the proposed factory/closure architecture as reasonable.
+- Argued for TypeScript data types rather than classes: `Card`; two arrays rather than `Hand`; no persisted `User`; `GameState` could be private state, not an instantiated class.
+- Compared a `play()` loop to a step-based `advance()` operation. Suggested advancing one card at a time to support intermediate views, playback and future UI, possibly adding a `play()` convenience runner outside the core.
+- Described the boundary: UI controls *when* a step occurs, core engine controls *what* the rules do.
+- Warned that the original rules specify drawing automatically until 17, and allowing human hit/stand decisions might conflict with them.
+- Suggested a small project layout (`game.ts`, `deck.ts`, `formatter.ts`, `cli.ts`) and fixed-deck tests at various phases.
+
+---
+
+## 3. Interactive play vs. automatic play
+
+### User — correction and design proposal (verbatim)
+
+> -- I don't like Hand, let's better use Player.
+> the rest of point 1 makes sense.
+> Point 2. There's a misconception - if you're talking about timers and transitions you mean the whole gameplay goes automatically, which isn't the case - the purpose of the game is getting lost. The player must be able to risk and hit after he reaches 17 and not automatically stop.
+> The requirement sounds ambiguous, so I'm checking with them what's correct, but I would definitely lean towards implementing what is playable and close to classic Blackjack rather than automatic game-like loops. So i would introduce .hit and .stand methods to the game service. But also, let's keep an option to auto play the game as it seems from the requirements. Auto-play mode should be controlled by the node argument.
+> Code organization looks good for now.
+>
+> Let's reiterate on the game service architecture
+
+### Assistant — response (condensed, not verbatim)
+
+- Agreed to use `Player` rather than `Hand` and to reconsider the service around a potential interactive API.
+- Proposed `createGame(deck)` with `start()`, `hit()`, `stand()` and `getState()` and private state for deck cursor, player/dealer and lifecycle.
+- Suggested phases `INITIAL`, `PLAYER_TURN`, `DEALER_TURN`, `FINISHED` if interactivity were required.
+- Compared resolving the entire Dealer turn within `stand()` against exposing one-step `advanceDealer()`; preferred the former for a small implementation.
+- Suggested isolating auto-play in a CLI runner, rather than embedding an auto/manual mode flag throughout the game engine.
+- Clearly warned that interactive stopping below 17 was *not* what the written Unleash requirement said; the candidate was awaiting clarification.
+
+---
+
+## 4. Confirmation from Unleash: fully autonomous gameplay
+
+### User — confirmed requirement and request (verbatim)
+
+> I've reconfirmed with Unleash that the game should be fully autonomous, wihtout human interaction: "The game should be fully autonomous, there's no option to choose whether to hit or stand." That changes the GameService API requirements and there's no obvious need in introducing a react-express app at all, other than visualizing the game flow, so there will be no V2 s V3, but let's make sure to mention these opportunities in the readme.md.
+> There's also a possibility that they may be testing this app against their test suite as a black box. We need to keep that in mind as well as the edge cases!
+> Let's reiterate on the architecture, again, my initial proposal of GameService.start() or .play() appears to be a viable option. Analyze and propose the approach
+
+### Assistant — response (condensed, not verbatim)
+
+- Accepted the confirmed rule and recommended returning to the original single-call `GameService.play()` design.
+- Recommended a simple sequential flow instead of a phase-based state machine, because there are no pauses or external player commands: `initialDraw` -> initial Blackjack resolution -> `playerTurn` -> bust check -> `dealerTurn` -> winner resolution.
+- Recommended `createGameService(deck): { play(): GameResult }` with private closure state, a deck cursor, two `Player` objects and a single-use guard.
+- Compared a standalone pure `playGame(deck)` function as an even simpler alternative, but regarded the factory as acceptable.
+- Highlighted black-box compatibility: required positional URL argument, exact output on stdout only, errors on stderr, predictable exit code, correct draw order, and no retries or deck replacement on request failure.
+- Confirmed the simple file structure: `src/cli.ts`, `deck.ts`, `game.ts`, `formatter.ts` and corresponding test files.
+
+---
+
+## 5. Player naming and deck exhaustion
+
+### User — correction and question (verbatim)
+
+> -- Ivar is not a default, default would be Player, and Dealer.
+> Can Deck realistically get exhausted? Normally, no. Explain the case.
+>
+> For the rest - yes, looks good. Answer the question above, do nothing else more.
+
+### Assistant — response (verbatim)
+
+> Agreed, the names will be **Player** and **Dealer**. `Ivar` is just the name used in their example.
+>
+> Regarding deck exhaustion: **with a normal, complete 52-card deck, exhaustion should never happen under these rules.**
+>
+> Both participants keep drawing until reaching relatively low thresholds (17 for Player, above Player's score for Dealer). Since every card contributes at least 2 points, neither can consume anywhere near the entire deck.
+>
+> However, the specification only guarantees that the endpoint returns a JSON list of cards. It doesn't explicitly guarantee 52 cards.
+>
+> For example, the endpoint could return:
+>
+> ```json
+> [
+>   {"suit":"HEARTS","value":"2"},
+>   {"suit":"CLUBS","value":"3"},
+>   {"suit":"DIAMONDS","value":"4"},
+>   {"suit":"SPADES","value":"5"}
+> ]
+> ```
+>
+> After the initial deal, Player has 5 points and must draw again, but the deck is empty.
+>
+> This could arise from an incomplete API response or a synthetic test fixture.
+>
+> **My recommendation:** Don't introduce special gameplay logic for exhaustion. Simply have `drawCard()` throw a descriptive error when there are no cards left. The CLI catches it, prints to stderr and exits with a nonzero status.
+>
+> It's essentially a defensive check that costs almost nothing and prevents undefined behavior.
+
+---
+
+## 6. Implementation and testing plan
+
+### User — request for holistic implementation plan (verbatim)
+
+> Yes, good point.
+>
+> Please create a holistic implementation plan now, divide it in parts - 0. Bootstrap the app boilerplate, packages, TypeScript, ts or eslint scripts (which one is best now?) in package.json, package.json needs to have scripts for running linter as well as the app. 1. GameService implementation details with test cases written in english. 2. DeckProvider implementation details with test cases written in english. Special attention to network issues handling and falling back to the pre-defined deck url if no node arg passed. 3. cli shell implementation details with test cases written in English. 4. Formatters + test cases. 5. Holistic integration test cases in english.
+> Anything else I forgot about?
+> For the test cases, pay special attention to edge cases!
+> CLI shell must have -h help output describing the api.
+> Print me the implementating plan.
+
+### Assistant — response (condensed, full artifact in Appendix B)
+
+The assistant drafted a staged implementation plan with:
+
+0. Node.js/TypeScript bootstrap, ESLint (instead of deprecated TSLint), Vitest, coverage, `tsx` and npm scripts for build, run, typecheck, lint and tests.
+1. GameService with small data models, factory closure, autonomous sequential play, card-score logic, explicit exhaustion behavior, and extensive deterministic scenarios.
+2. DeckProvider with default URL, custom URL, network timeouts, validation, invalid-response scenarios and explicit failure handling.
+3. CLI handling URL, `-h`/`--help`, errors on stderr, nonzero failure exit and exact successful stdout.
+4. Pure formatter for three-line output and precise card serialization.
+5. Integration tests running the compiled CLI against a local HTTP endpoint serving fixed test decks.
+6. QA, coverage, README, Git history, reviewer access, and `AI_CONVERSATION.md` transparency obligations.
+
+The concrete finalized implementation plan is reproduced in **Appendix B**. It represents the planning artifact, though not necessarily a byte-for-byte copy of the assistant's earlier prose answer.
+
+---
+
+## 7. Text, Markdown and requirements artifacts
+
+### User — request for ASCII output (verbatim)
+
+> Good, but can you print the implementation plan out in an ascii format so I could copy it into the repository for the refference
+
+### Assistant — response (condensed, artifact preserved)
+
+The assistant supplied a complete monospaced/plain-text implementation plan comprising the same project goal, architecture, stages, unit/integration test cases and final definition of done. It was later converted into `IMPLEMENTATION_PLAN.md` (see Appendix B for the current artifact).
+
+### User — request to include requirements (verbatim)
+
+> it's important to put original requirements before the implementation plan, can you add it?
+
+### Assistant — response (condensed)
+
+The assistant said it had updated the implementation plan to start with the original requirements, followed by the employer's additional fully autonomous clarification and then the implementation plan. A file link to `IMPLEMENTATION_PLAN.md` was provided.
+
+### User — prefer separate requirements document (verbatim)
+
+> No, let's better introduce a separate requirements.md, propose the content which exactly matches the original requirements from Unleash
+
+### Assistant — response (condensed, artifact preserved)
+
+The assistant agreed that `requirements.md` should reproduce the original assignment without mixing architectural decisions or later clarifications. It provided the assignment as a Markdown writing artifact, preserving the wording including `Ivar` in the example. The document is included in **Appendix A**.
+
+### User — request for Markdown plan (verbatim)
+
+> # Selected text:
+>
+> ## Selection 1
+> Here is the complete implementation plan in plain-text ASCII, ready to copy into IMPLEMENTATION_PLAN.txt or IMPLEMENTATION_PLAN.md.
+> Звичайний текст
+>
+> ## My request:
+> Format the implementation plan to markdown pls
+
+### Assistant — response (condensed)
+
+The assistant supplied a Markdown-formatted `IMPLEMENTATION_PLAN.md`, said it had structured headings, code blocks, test-case tables and checklists, and pointed to the separately maintained `requirements.md`.
+
+---
+
+## 8. Conversation compilation request
+
+### User — request (verbatim)
+
+> can you group the conversation from this chat for my AI_CONVERSATIONS.md? provide as an md file
+
+### Assistant — response / preparation
+
+The assistant prepared this grouped Markdown record and explicitly distinguished verbatim quotations from condensed summaries. Since the original Unleash requirement asks for the *complete conversation history*, this grouped record should be supplemented by a true chat export or an exact transcript before the repository is submitted.
+
+---
+
+## Appendix A: requirements.md
+
+The following is the standalone `requirements.md` prepared in this chat. It intentionally reflects the *original assignment*, not the subsequent fully autonomous clarification.
+
+# Blackjack
+
+## Rules
+
+Two players: You and the Dealer
+
+### Deck
+
+- A deck is represented as a json list of Card objects.
+- Your application should accept an URL on the command line. You should do a GET against this URL. This will give you the deck we expect you to play the game with
+  - TheresponsewillcontainajsonlistofCardobjects: `{"suit":"HEARTS","value":"5"}`, where suit is one of HEARTS | CLUBS | SPADES | DIAMONDS and value is one of the set 2,3,4,5,6,7,8,9,10,J,Q,K,A
+- If no URL is given on the command line, you should default to GET https://sandbox.getunleash.io/blackjack/shuffle
+
+### Values
+
+- Face cards (J, Q, K) has value 10, Aces (A) have value 11, number cards have the value their number states
+
+### Gameplay
+
+- One round of the game goes like this:
+  - You’ll draw two cards first.
+  - Dealer then draws two cards.
+  - If neither player has Blackjack (21) after the initial draw, go to rest of game
+  - If both players have Blackjack, Dealer wins
+  - You’ll draw cards until you have 17 or higher, you’ll go bust and lose if your score is above 21
+  - Once you’re done drawing, if you haven’t busted, it’s the Dealer’s turn.
+  - Dealer will draw until he has a higher score than you or goes bust (ends up with a score over 21)
+
+### Further clarification
+
+- If player is bust, player loses, no matter what happens to dealer
+- Blackjack only happens after initial draw. You only get blackjack if you get 21 with 2 cards in hand.
+
+### Output
+
+- Represent the suites with H | S | C | D and the value with the same string you received from the shuffle endpoint. So a 7 of spades is represented as S7
+- Print who won the game prefixed with Winner:
+- Newline
+- Dealer’s name, score and hand separated with ‘|’, so Dealer | `<score>` | S7,S10,CJ
+- Then print your name, your score and your hand separated with ‘|’, so Ivar | `<score>` | D2,H2,C6,H9
+
+Example full output:
+
+```text
+Winner: Ivar
+Dealer | 27 | S7,S10,CJ
+Ivar | 19 | D2,H2,C6,H9
+```
+
+## Notes
+
+- We’d like to see tests for your logic.
+
+## Deliverables
+
+- NOTE: If you use AI, please include your full conversation history with the agent in the repository in an AI_CONVERSATION.md file.
+- A github or gitlab repo containing your code, tests and instructions for how to build/run the project
+- Please submit your solution in Typescript, as it’s the primary language of our stack
+- For Github, access should be granted to users:
+  - chriswk
+  - ivarconr
+  - fredrikoseberg
+  - sighphyre
+  - gastonfournier
+  - kwasniew
+  - sjaanus
+  - nunogois
+- For Gitlab, access should be granted to users:
+  - chriswk
+  - ivarconr
+  - fredrikoseberg
+  - gastonfournier
+
+
+---
+
+## Appendix B: IMPLEMENTATION_PLAN.md
+
+The following is the complete Markdown implementation-plan artifact created during this conversation.
+
+# Blackjack — Implementation Plan
+
+> **Source:** See [requirements.md](requirements.md) for the original Unleash assignment. Unleash subsequently confirmed: “The game should be fully autonomous, there's no option to choose whether to hit or stand.” This plan records implementation decisions separately from the original requirements.
+
+## Project goal
+
+Build a fully autonomous Blackjack application in TypeScript.
+
+**Priorities:**
+- Correct implementation of Unleash's rules.
+- Simple, readable, maintainable architecture.
+- Deterministic and independently testable game logic.
+- Close to full test coverage, including edge cases.
+- Strict CLI input/output compatibility for black-box testing.
+- Clear documentation and reproducible builds.
+- Meaningful Git commit history.
+- Full AI conversation history in AI_CONVERSATION.md.
+
+The application does not require a web interface, database, authentication,
+server or interactive gameplay.
+
+Future web UI and multiplayer possibilities should be documented in README.md
+but not implemented.
+
+## Architecture
+
+```text
+CLI (arguments/help/error handling)
+  |
+  v
+DeckProvider (HTTP GET and JSON validation)
+  |
+  v
+GameService (fully autonomous game execution)
+  |
+  v
+GameResult
+  |
+  v
+Formatter (three-line output to stdout)
+```
+
+**Design principles:**
+
+1. GameService is synchronous, deterministic and UI-agnostic.
+2. No HTTP, console, process or environment access in GameService.
+3. Factory with closures encapsulates mutable game state.
+4. No dependency injection framework.
+5. No explicit game phase state machine.
+6. No persistent Game or User models.
+7. Card, Player and GameResult are plain TypeScript types.
+8. Deck order is preserved exactly as received.
+9. All errors are handled explicitly.
+10. Avoid unnecessary abstractions and dependencies.
+
+## 0. Application bootstrap
+
+### 0.1. Technology stack
+
+- Node.js 24 LTS
+- TypeScript with strict mode
+- Native fetch API
+- Vitest for unit and integration testing
+- @vitest/coverage-v8 for coverage
+- ESLint with typescript-eslint (flat config)
+- tsc for compilation and type checking
+- tsx for development execution
+- npm as package manager
+
+No production dependencies should be necessary.
+
+ESLint and tsc have different responsibilities:
+- ESLint checks code quality and linting rules.
+- tsc checks TypeScript types and compiles the application.
+
+Do not use TSLint (deprecated).
+
+### 0.2. Project structure
+
+```text
+blackjack/
+|
++-- src/
+|   +-- cli.ts
+|   +-- deck.ts
+|   +-- game.ts
+|   +-- formatter.ts
+|
++-- tests/
+|   +-- cli.test.ts
+|   +-- deck.test.ts
+|   +-- game.test.ts
+|   +-- formatter.test.ts
+|   +-- integration.test.ts
+|
++-- package.json
++-- package-lock.json
++-- tsconfig.json
++-- eslint.config.mjs
++-- vitest.config.ts
++-- .gitignore
++-- README.md
++-- AI_CONVERSATION.md
++-- IMPLEMENTATION_PLAN.md
+```
+
+### 0.3. Required npm scripts
+
+- `dev`: Run TypeScript application using tsx.
+- `build`: Compile TypeScript into dist/.
+- `start`: Execute compiled application using Node.
+- `typecheck`: Run tsc --noEmit.
+- `lint`: Run ESLint.
+- `lint:fix`: Run ESLint with automatic fixes.
+- `test`: Run Vitest once, without watch mode.
+- `test:watch`: Run Vitest in watch mode.
+- `test:coverage`: Run Vitest with coverage reporting.
+- `check`: Typecheck, lint, test and build.
+
+Suggested commands:
+
+```text
+npm run dev
+npm run build
+npm start
+npm start -- https://example.com/deck
+npm start -- --help
+npm run typecheck
+npm run lint
+npm test
+npm run test:coverage
+npm run check
+```
+
+### 0.4. TypeScript configuration
+
+- Enable strict mode.
+- Use modern Node-compatible ESM configuration and NodeNext module resolution.
+- Compile production sources into dist/.
+- Ensure compiled imports work directly in Node.
+- Exclude tests and generated output from production compilation.
+- Exclude dist/ and coverage/ from Git.
+- Use npm lockfile for reproducible installation.
+
+### 0.5. Bootstrap acceptance criteria
+
+- [ ] `npm ci` completes from a clean checkout.
+- [ ] `npm run build` succeeds.
+- [ ] `npm run typecheck` succeeds.
+- [ ] `npm run lint` succeeds.
+- [ ] `npm test` succeeds.
+- [ ] `npm run test:coverage` produces a coverage report.
+- [ ] `npm start -- --help` displays CLI help (once CLI stub is implemented).
+- [ ] Compiled JavaScript executes directly with Node.
+- [ ] Importing game logic causes no side effects.
+- [ ] No unnecessary runtime dependencies are installed.
+
+## 1. GameService
+
+### 1.1. Domain types
+
+Card:
+- suit: HEARTS | CLUBS | SPADES | DIAMONDS
+- value: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | J | Q | K | A
+- All card values are strings.
+
+Player:
+- cards: Card[]
+
+GameResult:
+- winner: 'Player' | 'Dealer'
+- player: Player
+- dealer: Player
+
+These are TypeScript types, not classes.
+
+### 1.2. Public API
+
+```text
+createGameService(deck)
+  |
+  +-- play(): GameResult
+```
+
+Factory closure state:
+- Deck
+- Current deck position
+- Player
+- Dealer
+- Flag indicating whether play() has already been called
+
+Service is single-use: a second call to play() should fail.
+
+### 1.3. Internal functions
+
+`drawCard()`:
+- Return the next card and advance the cursor.
+- Throw a descriptive error if the deck is exhausted.
+- Do not mutate the original input array.
+
+`calculateScore(cards)`:
+- Number cards: face numeric value.
+- J, Q, K: 10 points each.
+- A: always 11 points; no soft Ace behavior.
+
+`initialDraw()`:
+- Draw two cards for Player, then two for Dealer.
+- Preserve exact drawing order.
+
+`playerTurn()`:
+- Draw while Player's score is below 17.
+- End immediately on bust.
+
+`dealerTurn()`:
+- Draw until Dealer has a score strictly higher than Player's or busts.
+
+`resolveWinner()`:
+- Apply winner precedence exactly as specified.
+
+### 1.4. Execution flow
+
+```text
+play()
+  |
+  +-- initialDraw()
+  |
+  +-- Check natural Blackjack (after initial deal)
+  |     +-- Both Blackjack -> Dealer wins
+  |     +-- Player only    -> Player wins
+  |     +-- Dealer only    -> Dealer wins
+  |
+  +-- playerTurn()
+  |     +-- Player bust -> Dealer wins
+  |
+  +-- dealerTurn()
+  |     +-- Dealer bust -> Player wins
+  |     +-- Otherwise   -> Dealer wins
+  |
+  +-- Return GameResult
+```
+
+### 1.5. Important rules
+
+- Blackjack is 21 with exactly two initial cards.
+- Reaching 21 with three or more cards is not Blackjack.
+- Both natural Blackjacks mean Dealer wins.
+- Player bust always means Dealer wins, regardless of Dealer's cards.
+- Player automatically draws until 17 or higher.
+- Dealer must strictly exceed Player's score.
+- Dealer draws again on a tie.
+- Dealer stops if already ahead and not bust.
+- Ace is always worth 11, never 1.
+- The application neither shuffles nor requests hit/stand decisions.
+
+### 1.6. GameService unit test cases
+
+Initial draw and Blackjack:
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| G01 | Both players receive natural Blackjack. | Dealer wins. |
+| G02 | Only Player receives natural Blackjack. | Player wins immediately. |
+| G03 | Only Dealer receives natural Blackjack. | Dealer wins immediately. |
+| G04 | Neither player has initial Blackjack. | Normal gameplay continues. |
+| G05 | Initial draw is executed. | First two cards go to Player; next two go to Dealer. |
+
+Player behavior:
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| G06 | Player starts with exactly 17. | No additional Player cards. |
+| G07 | Player starts with 16. | Player draws another card. |
+| G08 | Player reaches exactly 17 after drawing. | Player stops drawing. |
+| G09 | Player reaches exactly 21 after three cards. | Score is 21, but not natural Blackjack. |
+| G10 | Player exceeds 21 after drawing. | Dealer wins immediately. |
+| G11 | Player receives two Aces initially. | Score is 22; Player loses unless natural Blackjack already ended the game in Dealer's favor. |
+| G12 | Player needs several cards to reach 17. | Player continues until score >= 17. |
+| G13 | Player busts while Dealer has a low score. | Dealer wins without further drawing. |
+
+Dealer behavior:
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| G14 | Dealer already has a higher, non-bust score. | Dealer wins without drawing. |
+| G15 | Dealer has the same score as Player. | Dealer draws another card. |
+| G16 | Dealer reaches a score greater than Player's. | Dealer stops and wins. |
+| G17 | Dealer exceeds 21 while drawing. | Player wins. |
+| G18 | Dealer has two Aces initially (22). | If Player does not bust, Player wins. |
+| G19 | Dealer reaches 21 with three cards. | Normal score, not natural Blackjack. |
+| G20 | Dealer needs multiple cards to beat Player. | Dealer keeps drawing until ahead or bust. |
+| G21 | Both players are bust without natural Blackjack. | Dealer wins because Player bust takes precedence. |
+
+Card scoring:
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| G22 | Number card is scored. | Numeric value. |
+| G23 | J, Q and K are scored. | Each contributes 10. |
+| G24 | Ace is scored. | Always contributes 11. |
+| G25 | Deck contains duplicate cards. | Game proceeds normally. |
+
+Deck and lifecycle edge cases:
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| G26 | Deck runs out during initial draw. | Descriptive error. |
+| G27 | Deck runs out during Player's turn. | Descriptive error. |
+| G28 | Deck runs out during Dealer's turn. | Descriptive error. |
+| G29 | play() is called twice. | Second call is rejected. |
+| G30 | Two new games receive identical decks. | Identical results. |
+| G31 | Game finishes before consuming all cards. | Remaining cards are not drawn. |
+| G32 | Game completes. | Original input deck is unchanged. |
+| G33 | Game finishes at an early-return condition. | No unnecessary cards are consumed. |
+
+### 1.7. GameService acceptance criteria
+
+- [ ] Synchronous and deterministic; only play() is public.
+- [ ] No networking or console interactions.
+- [ ] All scoring rules, draw order and winner precedence are correct.
+- [ ] Deck exhaustion handled.
+- [ ] Input deck not mutated.
+- [ ] Every meaningful branch tested.
+
+## 2. DeckProvider
+
+### 2.1. Responsibilities
+
+Default URL:
+`https://sandbox.getunleash.io/blackjack/shuffle`
+
+Public API concept:
+`fetchDeck(url?): Promise<Card[]>`
+
+1. Select supplied URL or default.
+2. Validate URL and protocol.
+3. Execute HTTP GET.
+4. Enforce timeout (including response body consumption).
+5. Check HTTP status.
+6. Parse JSON.
+7. Validate card array.
+8. Return cards in original order.
+
+### 2.2. URL handling
+
+- No URL -> default Unleash URL.
+- Explicit URL -> supplied URL only.
+- Invalid explicit URL -> report error.
+- Explicit URL failure -> never fall back to default URL.
+- Accept HTTP and HTTPS.
+
+### 2.3. Network error handling
+
+Handle DNS failure, refused connections, disconnections, request timeout,
+response body timeout, HTTP 4xx/5xx, invalid JSON and invalid deck format.
+
+**Suggested timeout:** 10 seconds.
+No automatic retries initially: simpler, predictable and avoids drawing a
+new shuffled deck on retry.
+
+### 2.4. Deck validation
+
+Validate:
+- Root response is an array.
+- Every element is a non-null object.
+- Every card has a valid suit and valid string value.
+- Required properties are present.
+
+Do NOT enforce:
+- Exactly 52 cards.
+- Uniqueness of cards.
+- A specific suit/value distribution.
+- Particular card ordering.
+
+An empty array is structurally valid; GameService will report exhaustion.
+
+### 2.5. DeckProvider unit test cases
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| D01 | No URL supplied. | Default URL requested. |
+| D02 | Custom URL supplied. | Custom URL requested. |
+| D03 | HTTP 200 returns valid deck. | Cards returned unchanged. |
+| D04 | HTTP 404. | Request fails. |
+| D05 | HTTP 429. | Request fails. |
+| D06 | HTTP 500. | Request fails. |
+| D07 | HTTP 503. | Request fails. |
+| D08 | DNS lookup fails. | Descriptive network error. |
+| D09 | Connection refused. | Descriptive network error. |
+| D10 | Server stalls before responding. | Request aborted on timeout. |
+| D11 | Headers arrive but response body stalls. | Body reading aborted on timeout. |
+| D12 | Malformed JSON. | Parsing error. |
+| D13 | Response is an object instead of array. | Validation error. |
+| D14 | Response is null. | Validation error. |
+| D15 | Array contains null. | Validation error. |
+| D16 | Card missing suit. | Validation error. |
+| D17 | Card missing value. | Validation error. |
+| D18 | Unknown suit. | Validation error. |
+| D19 | Unsupported value. | Validation error. |
+| D20 | Numeric value instead of string. | Validation error. |
+| D21 | Lowercase suit. | Validation error. |
+| D22 | Duplicate cards. | Accepted. |
+| D23 | Fewer than 52 cards. | Accepted as structurally valid. |
+| D24 | Explicit custom endpoint fails. | No fallback request. |
+| D25 | Valid deck fetched. | Exactly one GET request. |
+| D26 | Malformed URL. | Rejected. |
+| D27 | Unsupported URL protocol. | Rejected. |
+
+### 2.6. DeckProvider acceptance criteria
+
+- [ ] Default and custom URLs supported.
+- [ ] No fallback after explicit URL failure.
+- [ ] Timeout enforced for request and body.
+- [ ] HTTP and JSON errors handled.
+- [ ] Synthetic short decks accepted.
+- [ ] No shuffling or console output.
+
+## 3. CLI shell
+
+### 3.1. Responsibilities
+
+- Parse command-line arguments.
+- Support -h and --help.
+- Resolve optional deck URL.
+- Call DeckProvider.
+- Create and execute GameService.
+- Format and print result.
+- Handle errors and exit codes.
+
+No Blackjack rules should exist in CLI code.
+
+### 3.2. Usage
+
+```text
+npm start
+npm start -- https://example.com/deck
+npm start -- -h
+npm start -- --help
+
+node dist/cli.js
+node dist/cli.js https://example.com/deck
+node dist/cli.js --help
+```
+
+### 3.3. Help output
+
+```text
+Blackjack
+
+Usage:
+  blackjack [deck-url]
+  blackjack -h
+  blackjack --help
+
+Arguments:
+  deck-url    URL returning a JSON array of cards.
+              Optional; defaults to:
+              https://sandbox.getunleash.io/blackjack/shuffle
+
+Options:
+  -h, --help  Show this help message.
+
+The game runs automatically and prints the winner,
+Dealer's score and cards, and Player's score and cards.
+```
+
+### 3.4. Argument handling
+
+- No args -> default deck URL.
+- One URL -> custom URL.
+- -h/--help -> print help and exit 0 without networking.
+- Unknown option -> usage error.
+- Multiple positional URLs -> usage error.
+- Invalid URL -> diagnostic error.
+
+### 3.5. Output and errors
+
+Successful game:
+- Result only to stdout.
+- Exit code 0.
+- No prompts, banners or debug logs.
+
+Failed game:
+- Diagnostic to stderr.
+- Nonzero exit status.
+- No partial success output.
+
+### 3.6. CLI unit test cases
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| C01 | Run without arguments. | Default URL used. |
+| C02 | Run with custom URL. | Custom URL used. |
+| C03 | -h is supplied. | Help printed; exit 0. |
+| C04 | --help is supplied. | Help printed; exit 0. |
+| C05 | Help requested. | No HTTP request. |
+| C06 | Unknown option supplied. | Usage error. |
+| C07 | Multiple URLs supplied. | Usage error. |
+| C08 | Invalid URL supplied. | Descriptive error. |
+| C09 | Deck retrieval fails. | Error to stderr. |
+| C10 | GameService throws. | Error to stderr. |
+| C11 | Game completes. | Exact formatted result on stdout. |
+| C12 | Game fails. | No partial result on stdout. |
+| C13 | Game succeeds. | Exit 0. |
+| C14 | Game fails. | Nonzero exit. |
+| C15 | CLI executes. | No prompts or input required. |
+
+### 3.7. CLI acceptance criteria
+
+- [ ] Arguments and help work.
+- [ ] Invalid arguments rejected.
+- [ ] No interactive prompts.
+- [ ] Success output clean and exact.
+- [ ] Errors go to stderr with nonzero exit codes.
+
+## 4. Output formatter
+
+### 4.1. Responsibilities
+
+Pure function:
+`formatGameResult(result): string`
+
+Exact three-line format:
+
+```text
+Winner: Player
+Dealer | 27 | S7,S10,CJ
+Player | 19 | D2,H2,C6,H9
+```
+
+This is a format illustration, not a complete fixture.
+
+### 4.2. Card serialization
+
+- HEARTS -> H
+- SPADES -> S
+- CLUBS -> C
+- DIAMONDS -> D
+- Preserve original value: `10`, `J`, `Q`, `K`, `A`, etc.
+
+Examples: SPADES 7 -> S7, SPADES 10 -> S10, CLUBS J -> CJ.
+
+### 4.3. Formatting rules
+
+- Exactly three lines.
+- Winner first.
+- Dealer before Player.
+- Literal ` | ` separators.
+- Cards comma-separated with no spaces.
+- Preserve card order.
+- Include bust scores as actually calculated.
+- No headings, blank lines or extra spaces.
+
+Formatter returns lines joined by `\n` without a trailing newline;
+CLI prints one final newline.
+
+### 4.4. Formatter unit test cases
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| F01 | Winner is Player. | `Winner: Player`. |
+| F02 | Winner is Dealer. | `Winner: Dealer`. |
+| F03 | All suits appear. | Correct abbreviations. |
+| F04 | Value is 10. | `10`, not `T`. |
+| F05 | Value is J, Q, K or A. | Original symbol preserved. |
+| F06 | Player has multiple cards. | Comma-separated without spaces. |
+| F07 | Dealer has multiple cards. | Comma-separated without spaces. |
+| F08 | Cards have particular order. | Order preserved. |
+| F09 | Score exceeds 21. | Actual bust score printed. |
+| F10 | Both have natural Blackjack. | Dealer winner formatted correctly. |
+| F11 | Result formatted. | Exactly three lines. |
+| F12 | Result formatted. | No unexpected whitespace. |
+| F13 | Result formatted. | Exact ` \| ` separators. |
+| F14 | Result formatted. | Dealer line appears before Player. |
+| F15 | Result formatted twice. | Identical strings. |
+| F16 | Result formatted. | Input object not mutated. |
+
+### 4.5. Formatter acceptance criteria
+
+- [ ] Exact output format.
+- [ ] Correct scores and cards.
+- [ ] Deterministic; no mutation or side effects.
+
+## 5. Holistic integration tests
+
+### 5.1. Strategy
+
+1. Start local HTTP server returning a fixed JSON deck.
+2. Launch compiled CLI as a child process.
+3. Supply local URL as positional argument.
+4. Capture stdout, stderr and exit code.
+5. Compare against exact expected output.
+
+Do not mock GameService or DeckProvider in end-to-end tests.
+Do not use live Unleash endpoint in automated tests.
+
+### 5.2. Integration test cases
+
+| ID | Test scenario | Expected behavior |
+|---|---|---|
+| I01 | Player receives natural Blackjack. | Player wins with exact initial cards. |
+| I02 | Dealer receives natural Blackjack. | Dealer wins immediately. |
+| I03 | Both receive natural Blackjack. | Dealer wins without additional draws. |
+| I04 | Player draws multiple cards to reach 17. | Correct final score and hand. |
+| I05 | Player busts. | Dealer draws no further cards. |
+| I06 | Dealer already has higher non-bust score. | Dealer wins without additional cards. |
+| I07 | Dealer ties Player. | Dealer draws again. |
+| I08 | Dealer busts trying to beat Player. | Player wins. |
+| I09 | Aces and face cards occur. | Correct scoring. |
+| I10 | More cards are needed than available. | Controlled exhaustion error. |
+| I11 | Endpoint returns invalid JSON. | Nonzero exit and no result. |
+| I12 | Endpoint returns HTTP 500. | Nonzero exit and stderr diagnostic. |
+| I13 | Deck is too short to finish game. | Nonzero exit and no fabricated winner. |
+| I14 | Endpoint stalls indefinitely. | Timeout. |
+| I15 | CLI receives -h. | Help without fetching. |
+| I16 | Identical deck used on separate runs. | Byte-for-byte identical stdout. |
+| I17 | Output compared exactly. | Required spelling, ordering, separators and newline. |
+| I18 | CLI launched through documented npm command. | Successful execution. |
+| I19 | CLI launched directly with Node. | Successful execution. |
+
+### 5.3. Reference fixtures
+
+Fixture A: Player busts
+
+Deck order: H10, C6, D8, S7, HJ
+
+```text
+Winner: Dealer
+Dealer | 15 | D8,S7
+Player | 26 | H10,C6,HJ
+```
+
+Fixture B: Dealer busts
+
+Deck order: H10, C7, S9, D8, CJ
+
+```text
+Winner: Player
+Dealer | 27 | S9,D8,CJ
+Player | 17 | H10,C7
+```
+
+Fixture C: Both natural Blackjack
+
+Deck order: HA, S10, DA, CK
+
+```text
+Winner: Dealer
+Dealer | 21 | DA,CK
+Player | 21 | HA,S10
+```
+
+### 5.4. Integration acceptance criteria
+
+- [ ] Tests execute the compiled app against local HTTP fixtures.
+- [ ] No external network dependency.
+- [ ] Success and failure cases covered.
+- [ ] Stdout verified byte-for-byte; stderr and exit codes checked.
+- [ ] No extra stdout logging.
+- [ ] Tests pass from a clean build.
+
+## 6. Quality assurance and delivery
+
+### 6.1. Coverage
+
+- GameService: aim for 100% branch coverage, including all winner precedence
+  and drawing termination conditions.
+- DeckProvider: success, malformed data, HTTP/network failures, timeout.
+- Formatter: aim for 100% coverage.
+- CLI: all argument, help, failure and success paths.
+- Integration: representative end-to-end scenarios.
+
+Branch and behavior coverage matter more than line coverage alone.
+
+### 6.2. Optional property-based testing
+
+Only after the regular suite is complete. Candidate invariants:
+- Original deck never mutates.
+- Identical decks produce identical results.
+- Cards are consumed in sequence.
+- No cards are drawn after termination.
+- Successful games always have a valid winner.
+- Scores equal the sum of card values.
+
+### 6.3. README.md
+
+Include:
+1. Description and requirements/Node version.
+2. `npm ci`, build and run instructions.
+3. Default and custom deck URL usage.
+4. `-h` / `--help` documentation.
+5. Test, coverage, lint and typecheck commands.
+6. Rules and assumptions (fixed Aces, Blackjack precedence, dealer tie policy,
+   bust precedence, short decks, exhaustion, default URL).
+7. Architecture overview and error behavior.
+8. Potential future extensions (React replay UI, animated game flow,
+   interactive variant, multiplayer, server coordination and WebSockets).
+
+Do not implement future extensions in this assessment.
+
+### 6.4. Git history
+
+Suggested commit sequence:
+
+1. `chore: bootstrap TypeScript project and tooling`
+2. `feat: implement Blackjack game logic with tests`
+3. `feat: implement deck provider and validation`
+4. `feat: add CLI interface and help`
+5. `feat: implement game result formatter`
+6. `test: add CLI integration tests`
+7. `docs: add README and AI conversation history`
+
+Meaningful incremental commits are better than one giant commit.
+
+### 6.5. AI transparency
+
+- [ ] Create `AI_CONVERSATION.md`.
+- [ ] Include full relevant history, not only a summary.
+- [ ] Preserve questions, recommendations and architectural decisions.
+- [ ] Add subsequent AI-assisted interactions before submission.
+
+### 6.6. Submission checklist
+
+- [ ] `npm ci` works from clean checkout.
+- [ ] `npm run check` passes.
+- [ ] `npm run test:coverage` passes.
+- [ ] No TypeScript or ESLint errors.
+- [ ] Unit and integration suites pass.
+- [ ] CLI help works without a network.
+- [ ] Default Unleash URL works in a manual smoke test.
+- [ ] Custom deck URL works.
+- [ ] Stdout exactly matches format; no interaction required.
+- [ ] Errors produce nonzero status.
+- [ ] README instructions manually verified.
+- [ ] AI_CONVERSATION.md complete.
+- [ ] No secrets or generated output committed.
+- [ ] Git history coherent.
+
+GitHub reviewer access:
+- chriswk
+- ivarconr
+- fredrikoseberg
+- sighphyre
+- gastonfournier
+- kwasniew
+- sjaanus
+- nunogois
+
+GitLab reviewer access (if GitLab is used):
+- chriswk
+- ivarconr
+- fredrikoseberg
+- gastonfournier
+
+## 7. Implementation order
+
+- [ ] STEP 0 - Bootstrap: TypeScript, ESLint, Vitest, npm scripts, structure.
+- [ ] STEP 1 - GameService: deterministic gameplay, scoring and unit tests.
+- [ ] STEP 2 - DeckProvider: GET, validation, timeouts and error tests.
+- [ ] STEP 3 - CLI: arguments, help, output/error/exit behavior.
+- [ ] STEP 4 - Formatter: exact output and unit tests.
+- [ ] STEP 5 - Integration: compiled CLI against local HTTP fixtures.
+- [ ] STEP 6 - Delivery: QA, README, Git history, AI log and reviewer access.
+
+## Final definition of done
+
+1. All confirmed Unleash rules followed.
+2. CLI fully autonomous: no prompts.
+3. Optional positional deck URL supported; default endpoint works.
+4. Deterministic, isolated GameService.
+5. Edge cases covered by tests.
+6. Network failures handled predictably.
+7. Exact terminal output.
+8. Clean install, build, lint, typecheck and tests pass.
+9. README documents operation, decisions and possible extensions.
+10. Full AI conversation preserved in AI_CONVERSATION.md.
+11. Repository accessible to required Unleash reviewers.
+
+Guiding principle:
+
+Implement exactly what the assignment requires, test thoroughly, and avoid
+unnecessary complexity.
+
+=== Codex
+
+# Review blackjack implementation plan
+
+> Check REQUIREMENTS.md and IMPLEMENTATION_PLAN.md, analyze the concept, check for any redundant test cases and challenge the approach in case of logical issues.
+
+<details><summary>5 previous messages</summary>
+
+> I’ll read both documents, check for gaps or contradictions in the game logic, and review whether the planned tests cover distinct risks.
+>
+> <details><summary>Explored a file, a list, ran 6 commands</summary>
+>
+> - Ran `pwd && rg --files -g 'AGENTS.md' -g 'REQUIREMENTS.md' -g 'IMPLEMENTATION_PLAN.md' -g 'package.json' -g 'README*' -g 'pyproject.toml' -g 'Cargo.toml' -g 'go.mod' -g '*test*' -g '*spec*' -g '!node_modules' -g '!vendor'`
+>
+> - Ran `git status --short`
+>
+> - Ran `for task_path in /AGENTS.md /Users/AGENTS.md /Users/antonkotliarenko/AGENTS.md /Users/antonkotliarenko/Projects/AGENTS.md; do if [ -f "$task_path" ]; then printf '\n%s\n' "$task_path"; cat "$task_path"; fi; done`
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `if [ -f AGENTS.md ]; then cat AGENTS.md; fi
+> nl -ba REQUIREMENTS.md`
+>
+> <details><summary>Explored a list</summary>
+>
+> - Listed files
+>
+> </details>
+>
+> - Ran `git log -1 --oneline
+> ls -la`
+>
+> - Ran `node --version
+> npm --version`
+>
+> </details>
+>
+> The gameplay flow largely matches the assignment, including fixed-value Aces, drawing on dealer ties, and player-bust precedence. The test plan repeats several of those checks across layers. I’m also checking two gaps: how the formatter gets scores, and whether `npm start` preserves the exact stdout format.
+>
+> <details><summary>Ran a command</summary>
+>
+> - Ran `node <<'NODE'
+> const fs = require('node:fs');
+> const os = require('node:os');
+> const path = require('node:path');
+> const { spawnSync } = require('node:child_process');
+> const reviewDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blackjack-review-'));
+> try {
+>   fs.writeFileSync(path.join(reviewDir, 'package.json'), JSON.stringify({ name: 'blackjack-review', version: '1.0.0', scripts: { start: 'node result.cjs' } }));
+>   fs.writeFileSync(path.join(reviewDir, 'result.cjs'), 'console.log("Winner: Player");\n');
+>   for (const args of [['start'], ['--silent', 'start']]) {
+>     const result = spawnSync('npm', args, { cwd: reviewDir, encoding: 'utf8' });
+>     console.log(JSON.stringify({ command: ['npm', ...args].join(' '), status: result.status, stdout: result.stdout, stderr: result.stderr }));
+>   }
+> } finally {
+>   fs.rmSync(reviewDir, { recursive: true, force: true });
+> }
+> NODE`
+>
+> </details>
+>
+> Two concrete issues emerged: `check` runs tests before building the CLI that integration tests need, and `npm start` adds script banners to stdout. I verified the npm behavior locally. For test reduction, I’d merge repeated formatting assertions and trim the end-to-end scenarios, while retaining distinct cases for request versus body timeouts, exhaustion phases, and bust precedence.
+</details>
+
+The core game concept is sound: the plan correctly preserves fixed-value Aces, sequential dealing, dealer draws on ties, and player-bust precedence. All three reference fixtures are consistent. I would address the following before implementation.
+
+1. **Build must precede integration tests.**
+   [`check` runs tests before building](./IMPLEMENTATION_PLAN.md:116), while [integration tests launch the compiled CLI](./IMPLEMENTATION_PLAN.md:585). A clean checkout therefore needs an explicit build step before integration tests. Ensure standalone `test` and `test:coverage` commands also handle this.
+
+2. **The documented npm command conflicts with exact stdout requirements.**
+   The plan requires [result-only stdout](./IMPLEMENTATION_PLAN.md:475), but documents `npm start`. I verified locally that npm prints script banners to stdout. Document `npm --silent start -- <url>` or direct Node execution for machine-readable output, and test that exact invocation.
+
+3. **The scoring contract is incomplete.**
+   [`GameResult` contains cards but no scores](./IMPLEMENTATION_PLAN.md:168), while scoring is internal to GameService and the formatter must print scores. Decide explicitly between including finalized scores in the result or exposing a shared pure scoring function. Otherwise, scoring rules may get duplicated.
+
+4. **Keep tests within the type-checking scope.**
+   The plan [excludes tests from production compilation](./IMPLEMENTATION_PLAN.md:133), but lists only one TypeScript configuration. Use a checking configuration covering source and tests, plus a build configuration excluding tests.
+
+5. **Document the display-name choice.**
+   [Requirements ask for “your name”](./REQUIREMENTS.md:40), while the plan prints `Player`. The required literal name is ambiguous. Choose it explicitly and keep the display name separate from the domain winner identifier.
+
+I would also simplify the service design. A synchronous `playGame(deck: readonly Card[]): GameResult`, with a local cursor and hands, satisfies this application. The [factory, stored state, and single-use flag](./IMPLEMENTATION_PLAN.md:175) introduce lifecycle behavior absent from the assignment. Removing them also removes the artificial G29 test. The existing separation between HTTP, game logic, formatting, and CLI is useful.
+
+The test matrices contain **110 entries**, but many are assertions within a scenario rather than distinct scenarios. I would consolidate them as follows:
+
+| Cases | Recommended treatment |
+|---|---|
+| G04, G05 | Assert normal continuation and deal order in an existing gameplay fixture. |
+| G10, G13 | One player-bust fixture with a low-scoring dealer; assert winner and unchanged dealer hand. |
+| G31, G33 | Assert exact final hands in termination tests, including natural Blackjack with exactly four available cards. |
+| D04–D07 | One parameterized HTTP-status test. Separate cases add value only if handling differs. |
+| D08, D09 | One parameterized network-rejection test if both use identical handling. |
+| C03–C05 | Parameterize both help flags; assert help, exit zero, and no HTTP together. |
+| C09, C10, C12, C14 | Parameterize failure sources; assert stderr, empty stdout, and nonzero exit together. |
+| F03–F14 | Use exact full-string fixtures covering suits, symbols, ordering, scores, and whitespace. F10’s Blackjack winner rule belongs in game tests. |
+| I10, I13 | These describe the same exhaustion scenario; merge them. |
+| I17 | Make exact output comparison an assertion in every successful integration test. |
+| I01–I09 | Retain a few representative complete games; the remaining rule permutations belong primarily in game unit tests. |
+
+Some similar cases should remain distinct: **D10/D11** exercise timeout before headers versus during body consumption; **G26–G28** exercise exhaustion at different stages; **G18/G21** protect dealer-bust versus player-bust precedence.
+
+One particularly valuable fixture would strengthen several loosely specified cases:
+
+```text
+Deck: H10,C6,D10,S7,H5,C4,D2
+```
+
+Player starts at 16 and reaches 21. Dealer starts at 17, reaches 21, must draw again, and busts at 23. This verifies that:
+
+- Dealer being initially ahead does not bypass the player’s turn.
+- Three-card 21 does not trigger an early Blackjack victory.
+- A tie reached during dealer drawing still requires another draw.
+
+Overall, I’d keep the architecture small, resolve the execution contracts above, and turn the test inventory into fewer fixtures with stronger assertions. No files changed.
+
+> 1. You're right, to be fixed.
+> 2. Agree, to be fixed.
+> 3. Scorring should be implemented within GameService as a helper for calculating the winner and communicating this to the formatter.
+> 4. Correct, to be fixed.
+> 5. It must be the player's name, but I wouldn't like to introduce unnecessary interactivity, so let it default to Player and Dealer respectively, and optionally let's intoroduce Node's argument for setting the name.
+> 6. Yes, GameService factory can be simplified as we anyway let the game proceed automatically.
+> 7. Yes, some tests can be grouped and some parametrized, but this shouldn't meen we're shrinkening covered logical cases. Propose changes.
+> 8. The proposed fixture is helpful, let's use it.
+>
+> Propose individual changes, but don't change anything yet.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll check the current plan and propose each change separately, keeping all distinct test cases covered. I won’t edit any files.
+>
+> <details><summary>Explored a file, ran 2 commands, searched the web</summary>
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `nl -ba REQUIREMENTS.md
+> if [ -f AI_CONVERSATION.md ]; then wc -l AI_CONVERSATION.md; fi`
+>
+> - Ran `rg --files --hidden -g 'AGENTS.md' -g 'IMPLEMENTATION_PLAN.md' -g 'REQUIREMENTS.md' -g 'AI_CONVERSATION.md' -g '!\.git/**'
+> git status --short`
+>
+> Searched the web for `https://nodejs.org/docs/latest-v24.x/api/util.html`
+>
+> Searched the web for `site.nodejs.org ...`
+>
+> </details>
+>
+> I’d return each hand’s score in `GameResult`, with the scoring helper kept inside GameService. For naming, I propose `--name` for the player, with `Player` as the default and `Dealer` fixed. I’ll keep all integration scenarios as parameterized rows and preserve a mapping from the existing case IDs to the grouped tests.
+>
+> <details><summary>Searched the web</summary>
+>
+> Searched the web for `'util.parseArgs' in https://nodejs.org/download/release/v24.4.0/docs/api/util.html`
+>
+> </details>
+</details>
+
+I propose eight separate changes to [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md). The original requirements would remain unchanged.
+
+1. **Make every full test run build the application first.**
+
+   Define the scripts as:
+
+   ```json
+   "test": "npm run build && vitest run",
+   "test:coverage": "npm run build && vitest run --coverage",
+   "check": "npm run typecheck && npm run lint && npm test"
+   ```
+
+   This gives `check` the effective order: typecheck → lint → build → tests, with one build.
+
+   Make `test:watch` explicitly watch unit tests, excluding compiled-CLI integration tests to avoid testing stale JavaScript. Vitest supports an [exclude option](https://vitest.dev/guide/cli#exclude).
+
+2. **Document commands that preserve exact game output.**
+
+   Use these in usage examples and acceptance criteria:
+
+   ```sh
+   node dist/cli.js https://example.com/deck
+   npm --silent start -- https://example.com/deck
+   ```
+
+   Keep `start` limited to executing the compiled CLI. Build separately. Integration tests should verify exact stdout through both documented entry points.
+
+3. **Keep scoring inside GameService and return calculated scores.**
+
+   Retain an internal `calculateScore(cards)` helper. Use it for turn decisions, winner resolution, and the returned hand scores.
+
+   Extend the result types conceptually to:
+
+   ```ts
+   type HandResult = {
+     readonly cards: readonly Card[];
+     readonly score: number;
+   };
+
+   type GameResult = {
+     readonly winner: 'Player' | 'Dealer';
+     readonly player: HandResult;
+     readonly dealer: HandResult;
+   };
+   ```
+
+   The formatter prints the supplied scores and winner. It contains no scoring or winner-selection rules. Test scoring through the public game result so the helper can remain internal.
+
+4. **Separate checking configuration from compilation configuration.**
+
+   Add `tsconfig.build.json`:
+
+   | Configuration | Responsibility |
+   |---|---|
+   | `tsconfig.json` | Strict checking of source, tests, and TypeScript configuration files; used with `--noEmit`. |
+   | `tsconfig.build.json` | Extend the checking configuration, include production source only, set `rootDir: src` and `outDir: dist`. |
+
+   Update `build` to use `tsc -p tsconfig.build.json`. TypeScript supports [extending configurations and overriding their included files](https://www.typescriptlang.org/tsconfig/extends.html).
+
+5. **Introduce an optional `--name` application argument.**
+
+   Proposed usage:
+
+   ```sh
+   node dist/cli.js [deck-url] [--name <player-name>]
+   npm --silent start -- https://example.com/deck --name "Alex Smith"
+   ```
+
+   Parse it using Node’s built-in [`util.parseArgs`](https://nodejs.org/download/release/v24.4.0/docs/api/util.html#utilparseargsconfig), keeping runtime dependencies unnecessary.
+
+   Proposed behavior:
+
+   - Player name defaults to `Player`; dealer name remains `Dealer`.
+   - `--name` works with either the default endpoint or a supplied URL.
+   - Trim surrounding whitespace; allow spaces and Unicode.
+   - Reject missing or empty names, control characters, and `|` to preserve the output structure.
+   - Pass the normalized name to the formatter.
+   - Keep `GameResult.winner` role-based, so names never affect gameplay.
+
+   Add cases for default naming, custom naming, invalid names, and correct name placement in both winner and hand lines.
+
+6. **Replace the factory with one autonomous game function.**
+
+   Replace `createGameService(deck).play()` with:
+
+   ```ts
+   playGame(deck: readonly Card[]): GameResult
+   ```
+
+   Keep the cursor, hands, and mutable execution state local to each call. Remove the single-use flag.
+
+   Replace G29’s “second call rejected” expectation with “repeated calls succeed independently.” Retain G30’s deterministic-result assertion, and verify that a failed game does not affect a later call.
+
+7. **Group tests while retaining every distinct logical case.**
+
+   Keep the existing IDs as traceability references. Parameterized rows should remain individually named and reported.
+
+   | Existing cases | Proposed organization |
+   |---|---|
+   | G01–G03 | Natural-Blackjack table covering all three winner combinations. Assert initial deal order and immediate termination in each row. |
+   | G04–G08, G12 | Player-turn table retaining normal continuation, starting at 16, starting at 17, reaching 17, and requiring multiple draws. |
+   | G10, G11, G13, G18, G21 | Bust-precedence table retaining drawn bust, initial player bust, low-scoring dealer, initial dealer bust, and both bust. |
+   | G14–G17, G20 | Dealer-turn table retaining already ahead, initially tied, becoming ahead, busting, and requiring multiple draws. |
+   | G22–G24 | Scoring table covering every valid rank through returned scores. |
+   | G26–G28 | Exhaustion table with separate rows for initial deal, player turn, and dealer turn. |
+   | G31, G33 | Termination assertions in relevant fixtures. Include decks ending exactly at termination to expose unnecessary draws. |
+   | D04–D09 | Separate parameterized tables for HTTP statuses and network failures; retain every listed status and failure type. |
+   | D13–D21 | Invalid-payload table retaining every malformed input. |
+   | C03–C05 | Help-flag table asserting help output, exit zero, and no networking together. |
+   | C09, C10, C12, C14 | Failure-source table asserting stderr, empty stdout, and nonzero exit together. |
+   | C11, C13, C15 | Success assertions covering exact stdout, empty stderr, exit zero, and completion without input. |
+   | F01–F16 | Exact-output fixture table covering both winners, every symbol, ordering, whitespace, and bust scores. Keep repeatability and input-immutability assertions. |
+
+   Keep D10 and D11 distinct: timeout before headers and timeout during body consumption exercise different failure points. Duplicate-card acceptance, input immutability, and default/custom URL cases also remain covered.
+
+   For integration tests, **retain I01–I09 as parameterized gameplay scenarios**. My earlier suggestion to reduce these to a few representative games would reduce integration coverage.
+
+   Merge only the duplicate exhaustion descriptions I10/I13. Make I17’s exact-output check an assertion in every successful scenario. Retain I16’s repeat-run check and I18/I19’s two launch methods.
+
+8. **Add Fixture D for three-card 21 and a subsequent dealer tie.**
+
+   Deck:
+
+   ```text
+   H10,C6,D10,S7,H5,C4,D2
+   ```
+
+   Expected output:
+
+   ```text
+   Winner: Player
+   Dealer | 23 | D10,S7,C4,D2
+   Player | 21 | H10,C6,H5
+   ```
+
+   Use it in game and integration tests. It strengthens G09/G19 and verifies that the player completes their turn despite the dealer initially being ahead, three-card 21 permits continued gameplay, and a dealer reaching a tie must draw again.
+
+No files changed.
+
+> Good.
+>
+> Pls update the implementation plan, but take into account the following
+>
+> - Keep GameResult.winner as 'player' or 'dealer; separate from diplay names
+> - Ok for using playGame(deck) instead of factory
+> - for the integration tests let's procceed as proposed + one npm silent smoke test
+>
+> Do not implement anything yet.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll update the plan with lowercase winner roles, `playGame(deck)`, the agreed test grouping, and one npm silent smoke test. I’ll leave the application unimplemented.
+>
+> <details><summary>Edited a file, explored a file, ran 2 commands</summary>
+>
+> - Ran `wc -l AI_CONVERSATION.md
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `rg --files --hidden -g 'AGENTS.md' -g 'IMPLEMENTATION_PLAN.md' -g 'REQUIREMENTS.md' -g 'AI_CONVERSATION.md' -g '!\.git/**'
+> git status --short`
+>
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+57 -43)
+>
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+34 -82)
+>
+> </details>
+>
+> The plan now uses `playGame(deck)`, returns calculated scores, and separates lowercase winner roles from display names. I’ve also preserved the original game test IDs in the grouped coverage matrix. Next I’ll update naming and the integration strategy, then check for inconsistencies.
+>
+> <details><summary>Edited a file, explored a file, a search, ran 5 commands</summary>
+>
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+58 -49)
+>
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+79 -33)
+>
+> <details><summary>Explored 3 files, a search</summary>
+>
+> - Searched for `createGameService|play\(\)|factory|Factory|single-use|winner|npm start|npm --silent|test:watch|tsconfig|I18|I19|Fixture D|Player:|formatGameResult|GameService|coverage|AI_CONVERSATION` in `IMPLEMENTATION_PLAN.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `git diff --check
+> git diff --stat
+> git diff -- IMPLEMENTATION_PLAN.md`
+>
+> - Ran `sed -n '590,680p' IMPLEMENTATION_PLAN.md
+> git diff --check`
+>
+> - Ran `rg -n "createGameService|play\(\)|winner:|only play|single-use|npm start|parseArgs|Fixture D|I18|I19|tsconfig.build" IMPLEMENTATION_PLAN.md
+> git diff --name-only`
+>
+> - Ran ````python3 <<'PY'
+> import re
+> import subprocess
+> from pathlib import Path
+>
+> plan = Path('IMPLEMENTATION_PLAN.md').read_text()
+> original = subprocess.check_output(['git', 'show', ':IMPLEMENTATION_PLAN.md'], text=True)
+>
+> def ids(document):
+>     covered = set()
+>     for match in re.finditer(r'\b([GDCFI])(\d{2})(?:-([GDCFI])(\d{2}))?\b', document):
+>         prefix, start, end_prefix, end = match.groups()
+>         if end:
+>             assert prefix == end_prefix
+>             covered.update(f'{prefix}{value:02d}' for value in range(int(start), int(end) + 1))
+>         else:
+>             covered.add(f'{prefix}{start}')
+>     return covered
+>
+> missing = ids(original) - ids(plan)
+> assert not missing, missing
+> print(f'All {len(ids(original))} original case IDs remain traceable; G29 is explicitly replaced by call-independence coverage.')
+> fences = [line for line in plan.splitlines() if line.startswith('```')]
+> assert len(fences) % 2 == 0
+> print(f'Markdown code fences balanced: {len(fences) // 2} blocks.')
+> for label, deck, player, dealer in [
+>     ('A', ['H10', 'C6', 'D8', 'S7', 'HJ'], ['H10', 'C6', 'HJ'], ['D8', 'S7']),
+>     ('B', ['H10', 'C7', 'S9', 'D8', 'CJ'], ['H10', 'C7'], ['S9', 'D8', 'CJ']),
+>     ('C', ['HA', 'S10', 'DA', 'CK'], ['HA', 'S10'], ['DA', 'CK']),
+>     ('D', ['H10', 'C6', 'D10', 'S7', 'H5', 'C4', 'D2'], ['H10', 'C6', 'H5'], ['D10', 'S7', 'C4', 'D2']),
+> ]:
+>     def score(hand):
+>         ranks = {'J': 10, 'Q': 10, 'K': 10, 'A': 11}
+>         return sum(ranks[card[1:]] if card[1:] in ranks else int(card[1:]) for card in hand)
+>     assert f'Deck order: {", ".join(deck)}' in plan
+>     assert f'Player | {score(player)} | {",".join(player)}' in plan
+>     assert f'Dealer | {score(dealer)} | {",".join(dealer)}' in plan
+>     print(f'Fixture {label} score arithmetic matches the documented hands.')
+> for other_file in ['REQUIREMENTS.md', 'AI_CONVERSATION.md']:
+>     staged = subprocess.check_output(['git', 'show', f':{other_file}'])
+>     assert Path(other_file).read_bytes() == staged, other_file
+> print('REQUIREMENTS.md and AI_CONVERSATION.md match their staged content.')
+> PY````
+>
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+4 -1)
+>
+> - Ran `git diff --check
+> git diff --stat
+> git status --short`
+>
+> </details>
+</details>
+
+Updated [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) with all agreed changes, including:
+
+- Lowercase `'player' | 'dealer'` winner roles and `playGame(deck)`.
+- Internal scoring, optional `--name`, and build/typecheck fixes.
+- Grouped tests preserving coverage, Fixture D, and Node integration tests plus one npm silent smoke test.
+
+Only the plan changed. No implementation added; `git diff --check` passes.
+
+> Ok, good, but let's simplify the implementation plan, 800 lines is unnecessary long for such a small feature, I would aim for the half of it's size as max.
+>
+> Keep these:
+>
+> - architecture and key technical decisions
+> - Implementation steps and npm scripts
+> - CLI arguments, output format, error handling
+> - important requirement and edge cases
+> - testing strategy, including meaningful scenarios and all four reference fixtures
+> - final verification and submission checklist
+>
+> Remove
+>
+> - redundant acceptance criteria
+> - historical test IDs and excessive test matrices
+> - anything that doesn't add practical value, formal wording
+>
+> Important -- preserve all functional requirements, important edge cases and agreed decisions! Don't drop test coverage.
+>
+> Aim for ease of perception and keep it practical.
+>
+> After editing, briefly summarize what you removed/consolidated and flag anything important that might have been lost - very important.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll shorten the plan to under 400 lines, consolidate repeated checks, and remove test IDs and matrices. Then I’ll compare it with the current plan to check that the rules, edge cases, and agreed decisions are still covered.
+>
+> <details><summary>Explored a file, ran a command</summary>
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `cat REQUIREMENTS.md
+> git status --short
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+>
+> </details>
+>
+> The main cuts will be repeated acceptance lists, historical test IDs, the full help-text mockup, and detailed commit suggestions. I’ll keep the test scenarios as short lists, including both timeout stages, all exhaustion phases, bust precedence, name validation, and exactly one npm silent smoke test.
+>
+> <details><summary>Edited a file, ran 4 commands</summary>
+>
+> - Ran ````python3 <<'PY'
+> from pathlib import Path
+>
+> plan = r'''# Blackjack — Implementation Plan
+>
+> Build a fully autonomous TypeScript CLI following [REQUIREMENTS.md](REQUIREMENTS.md).
+> Unleash confirmed there are no interactive hit/stand decisions. This plan records
+> implementation choices; the original requirements remain unchanged.
+>
+> ## Architecture and technical choices
+>
+> The CLI coordinates three independent modules:
+>
+> ```text
+> fetchDeck(url?) -> playGame(deck) -> formatGameResult(result, playerName) -> stdout
+> ```
+>
+> - `src/cli.ts`: arguments, names, orchestration, stdout/stderr and exit codes.
+> - `src/deck.ts`: HTTP GET, URL handling and JSON validation.
+> - `src/game.ts`: synchronous, deterministic gameplay and internal scoring.
+> - `src/formatter.ts`: pure result serialization; no scoring or winner decisions.
+> - Keep matching unit test files and `tests/integration.test.ts` under `tests/`.
+> - Use plain types and local execution state. No factory, persistent Game/User
+>   models, dependency injection framework or explicit phase state machine.
+> - No web interface, application server, database, authentication or multiplayer.
+>
+> Use Node.js 24 LTS, strict TypeScript with ESM/NodeNext, native fetch and npm.
+> Use Vitest with `@vitest/coverage-v8`, ESLint with typescript-eslint flat config,
+> `tsc` for checking/building and `tsx` for development. No production dependencies.
+>
+> Configuration:
+>
+> - `tsconfig.json` checks source, tests and TypeScript configuration files.
+> - `tsconfig.build.json` extends it, includes only `src/`, sets `rootDir: src`
+>   and `outDir: dist`, and excludes tests, tooling configuration and generated files.
+> - Compiled imports must run directly in Node. Commit `package-lock.json` for
+>   reproducible installs; ignore `node_modules/`, `dist/` and `coverage/` in Git.
+>
+> ## npm scripts
+>
+> | Script | Command |
+> |---|---|
+> | `dev` | `tsx src/cli.ts` |
+> | `build` | `tsc -p tsconfig.build.json` |
+> | `start` | `node dist/cli.js` |
+> | `typecheck` | `tsc --noEmit -p tsconfig.json` |
+> | `lint` | `eslint .` |
+> | `lint:fix` | `eslint . --fix` |
+> | `test` | `npm run build && vitest run` |
+> | `test:watch` | `vitest --exclude tests/integration.test.ts` |
+> | `test:coverage` | `npm run build && vitest run --coverage` |
+> | `check` | `npm run typecheck && npm run lint && npm test` |
+>
+> Full test and coverage runs build first, even without an existing `dist/`.
+> `check` runs typecheck -> lint -> build -> tests, with one build. Watch mode
+> covers unit tests only, avoiding stale compiled CLI output in integration tests.
+>
+> ## Game API and rules
+>
+> Cards use suits `HEARTS | CLUBS | SPADES | DIAMONDS` and string values
+> `2,3,4,5,6,7,8,9,10,J,Q,K,A`.
+>
+> ```ts
+> type HandResult = {
+>   readonly cards: readonly Card[];
+>   readonly score: number;
+> };
+>
+> type GameResult = {
+>   readonly winner: 'player' | 'dealer';
+>   readonly player: HandResult;
+>   readonly dealer: HandResult;
+> };
+>
+> // Public execution API; Card is a plain type with the suit/value above.
+> function playGame(deck: readonly Card[]): GameResult;
+> ```
+>
+> Each call owns its cursor and hands. Preserve input order and do not mutate the
+> deck or card objects. Calls are independent, including after a failed call;
+> identical decks give identical results. Importing game logic has no side effects.
+> Game logic has no HTTP, console, process or environment access.
+>
+> Keep drawing, scoring, dealing, turns and winner resolution internal to the game
+> module. Use one `calculateScore(cards)` helper for decisions and returned scores:
+> numbers use their numeric value, J/Q/K are 10, and A is always 11, never 1.
+> The formatter receives final scores and never recalculates them. Display names
+> are absent from GameResult; winner values always identify lowercase roles.
+>
+> Execute one round in this order:
+>
+> 1. Deal two cards to Player, then two to Dealer, without shuffling.
+> 2. Check natural Blackjack after the complete initial deal: exactly two cards
+>    totaling 21. Both naturals -> Dealer wins; otherwise the sole natural wins.
+> 3. Without a natural, Player draws while below 17 and stops at 17 or higher.
+>    Above 21 means an immediate loss; Dealer takes no further cards.
+> 4. If Player survives, Dealer draws while its score is at most Player's and it
+>    has not busted. Ties require another draw, including ties reached after a hit.
+>    Dealer stops immediately when strictly ahead and non-bust.
+> 5. Dealer bust -> Player wins; otherwise Dealer wins. Return both final hands
+>    and their actual scores immediately whenever the winner is resolved.
+>
+> Important edges:
+>
+> - Three-or-more-card 21 is an ordinary score, not natural Blackjack.
+> - Two Aces total 22. Player bust takes precedence even when Dealer is also bust.
+> - Resolve an initial dealer bust only after Player's turn; Player can still bust
+>   and lose. Dealer being initially ahead does not skip Player's turn.
+> - An already-ahead, non-bust Dealer takes no additional cards after Player's turn.
+> - Exhaustion during the initial deal or either turn throws a descriptive error;
+>   never invent a winner, reshuffle or draw after termination.
+>
+> ## Deck retrieval
+>
+> API: `fetchDeck(url?): Promise<Card[]>`.
+>
+> Default endpoint: `https://sandbox.getunleash.io/blackjack/shuffle`.
+>
+> - DeckProvider owns default URL selection and URL validation. Accept HTTP/HTTPS;
+>   reject malformed URLs and unsupported protocols before networking.
+> - Make one GET. Explicit endpoint failures never trigger a default fallback.
+>   Do not retry: a retry could fetch a different shuffled deck.
+> - Use a 10-second timeout covering the request and response body consumption.
+> - Handle DNS failures, refused connections, disconnections, timeout before headers
+>   or during body reading, HTTP 4xx/5xx, malformed JSON and invalid card data.
+> - Require an array of non-null card objects with valid suit and string value.
+>   Reject missing fields, unknown/lowercase suits, unsupported values and numbers
+>   supplied instead of strings.
+> - Preserve order and values. Do not enforce 52 cards, uniqueness, suit/value
+>   distribution or any particular ordering. Short and duplicate-card decks are
+>   valid; an empty array is structurally valid and later exhausts in playGame.
+> - No shuffling or console output in DeckProvider.
+>
+> ## CLI and output
+>
+> Parse arguments with Node's built-in `parseArgs` from `node:util`, with strict
+> options and positional arguments allowed. Accept at most one positional URL.
+>
+> ```text
+> node dist/cli.js [deck-url] [--name <player-name>]
+> npm --silent start -- [deck-url] [--name <player-name>]
+> ```
+>
+> - Omitted URL -> pass undefined to DeckProvider to use the default endpoint.
+> - `--name <player-name>` changes only Player's display name; default is `Player`.
+>   Dealer's display name stays `Dealer`, with no dealer-name option or prompt.
+> - Support the name option before/after the URL, with default or custom endpoint.
+>   Trim surrounding whitespace; allow internal spaces and Unicode. Reject missing,
+>   empty or whitespace-only names, control characters and the pipe character.
+> - `-h` and `--help` print usage, arguments, defaults and automatic-game behavior,
+>   then exit 0 without networking. Unknown options and multiple URLs are errors.
+> - Validate arguments/names before fetching; invalid URLs fail before HTTP.
+>
+> Build separately before running. Use direct Node or `npm --silent start` for
+> exact stdout: plain `npm start` adds npm banners. Do not add a prestart build
+> that writes to game stdout. Examples:
+>
+> ```sh
+> npm ci
+> npm run build
+> node dist/cli.js
+> node dist/cli.js https://example.com/deck --name "Alex Smith"
+> npm --silent start -- https://example.com/deck --name "Alex Smith"
+> npm --silent start -- --help
+> ```
+>
+> Formatter API: `formatGameResult(result: GameResult, playerName: string): string`.
+> The CLI passes the validated name, defaulting to Player. Map winner role 'player'
+> to that name and 'dealer' to Dealer; never identify roles by comparing names.
+>
+> Successful game output is exactly:
+>
+> ```text
+> Winner: <winning display name>
+> Dealer | <score> | <comma-separated cards>
+> <player name> | <score> | <comma-separated cards>
+> ```
+>
+> Use `HEARTS -> H`, `SPADES -> S`, `CLUBS -> C`, `DIAMONDS -> D` and preserve
+> original rank strings, including `10`, J, Q, K and A. Preserve card order, use
+> literal ` | ` separators and no spaces between cards. Print supplied scores,
+> including bust totals. No extra headings, blank lines, spaces, prompts or logs.
+> Formatter joins three lines with `\n` and no trailing newline; CLI adds one.
+>
+> Success: result only on stdout, empty stderr, exit 0. Failure: diagnostic on
+> stderr, empty stdout, nonzero exit. Never print a partial result.
+>
+> ## Testing
+>
+> Use shared fixtures and parameterized tests with named, independently reported
+> cases. Consolidate setup and assertions, not distinct inputs or outcomes.
+> Aim for 100% game branch and formatter coverage; cover all CLI paths and deck
+> success/failure paths. Prioritize behavior over line counts.
+>
+> ### Game unit scenarios
+>
+> - Player-only, dealer-only and both natural Blackjacks; assert winner, initial
+>   two-then-two deal, scores and immediate termination.
+> - Normal continuation: Player starts at 16 and draws; stands at 17, 18, 19 or 20;
+>   reaches exactly 17 after drawing; needs multiple draws to reach the threshold.
+> - Player bust after a hit, player two-Ace initial bust, bust while Dealer is low,
+>   dealer two-Ace initial bust while Player survives, and both players bust.
+> - Dealer already ahead after Player's turn, initially tied, becoming strictly
+>   ahead after drawing, busting while drawing, and needing several draws.
+> - Fixture D: Player completes its turn despite Dealer initially being ahead;
+>   both reach three-card 21, Dealer draws again on the tie and busts.
+> - Parameterize every rank (2-10, J, Q, K, A) through returned scores. An opposing
+>   natural can keep the hand being scored unchanged without exposing the helper.
+> - Accept duplicate cards. Test exhaustion during initial deal (0-3 cards),
+>   Player's turn and Dealer's turn.
+> - Repeated identical/different-deck calls and a valid call after failure share
+>   no state. Assert deterministic results, legal winner roles, unchanged input
+>   arrays/card objects, sequential consumption and scores equal to card sums.
+> - Assert exact hands and no extra draws at every termination path. Include
+>   decks ending on the final required card and variants with unused trailing cards.
+>
+> ### Deck, CLI and formatter unit scenarios
+>
+> - Deck: default/custom endpoint, HTTP 200, exactly one GET and preserved order;
+>   HTTP 404/429/500/503; DNS failure, refused connection and disconnection;
+>   malformed URL/protocol/JSON; no retries or fallback after explicit failure.
+> - Keep timeout-before-headers and timeout-during-body as distinct tests.
+> - Validate object/null root, null card, each missing field, invalid/lowercase suit,
+>   unsupported value and numeric value. Accept duplicate, short and empty arrays.
+> - CLI: URL forwarding/default delegation; both help flags without networking;
+>   unknown option, multiple URLs and invalid URL; deck-fetch and game failures.
+> - Names: defaults, custom name with each endpoint choice and option position,
+>   trimming, internal spaces and Unicode; reject missing/empty/whitespace-only
+>   names, control characters and pipe before any networking.
+> - Assert stdout, stderr and exit code together on every success/failure case,
+>   including no partial result and completion without interactive input.
+> - Formatter: exact strings for both winners and the both-natural result; all
+>   suits and rank symbols, ordered multi-card hands for both roles, supplied bust
+>   scores, separators, three lines and no trailing newline. Assert repeatability
+>   and no input mutation. Custom names must appear in the player hand and, only
+>   for a player victory, the winner line; include spaces and Unicode.
+>
+> ### Integration strategy and scenarios
+>
+> Build first, then run the compiled CLI against a local HTTP fixture server.
+> Do not mock game/deck modules or use the live Unleash endpoint in automated tests.
+> Run the full suite directly through Node, capturing stdout/stderr/exit code and
+> providing no interactive input. Verify successful output byte-for-byte, including
+> one final newline; failure has empty stdout, diagnostic stderr and nonzero exit.
+>
+> Keep named rows for all of these gameplay scenarios:
+>
+> - Player-only, dealer-only and both natural Blackjacks.
+> - Player drawing multiple cards to reach 17; Player bust with no dealer draws.
+> - Dealer already ahead after Player's turn; dealer tie requiring another draw;
+>   Dealer bust trying to win.
+> - Aces/face-card scoring and Fixture D's three-card 21 followed by a dealer tie.
+>
+> Also cover exhaustion with no fabricated winner, malformed JSON, HTTP 500,
+> a stalled endpoint, both help flags without fetching, and byte-identical results
+> on separate runs with the same deck. Shared exact-output checks apply to every
+> successful fixture; the two former exhaustion descriptions are one scenario.
+>
+> Add exactly one npm smoke test, using Fixture D and:
+> `npm --silent start -- <local-url> --name "Alex Smith"`.
+> Expect `Winner: Alex Smith` and `Alex Smith | 21 | H10,C6,H5`, with the same
+> Dealer line as Fixture D, empty stderr, exit 0 and no npm banner or input prompt.
+> Do not repeat the integration suite through npm.
+>
+> ## Reference fixtures
+>
+> Use all four fixtures in game and integration tests. Outputs below use default
+> names; CLI adds one final newline.
+>
+> ### A — Player bust
+>
+> Deck: H10, C6, D8, S7, HJ
+>
+> ```text
+> Winner: Dealer
+> Dealer | 15 | D8,S7
+> Player | 26 | H10,C6,HJ
+> ```
+>
+> ### B — Dealer bust
+>
+> Deck: H10, C7, S9, D8, CJ
+>
+> ```text
+> Winner: Player
+> Dealer | 27 | S9,D8,CJ
+> Player | 17 | H10,C7
+> ```
+>
+> ### C — Both natural Blackjack
+>
+> Deck: HA, S10, DA, CK
+>
+> ```text
+> Winner: Dealer
+> Dealer | 21 | DA,CK
+> Player | 21 | HA,S10
+> ```
+>
+> ### D — Three-card 21, dealer tie and bust
+>
+> Deck: H10, C6, D10, S7, H5, C4, D2
+>
+> ```text
+> Winner: Player
+> Dealer | 23 | D10,S7,C4,D2
+> Player | 21 | H10,C6,H5
+> ```
+>
+> Player starts at 16, Dealer at 17. H5 gives Player 21; C4 ties Dealer at 21;
+> D2 then busts Dealer. Neither three-card 21 ends the game as natural Blackjack.
+>
+> ## Implementation steps
+>
+> 1. Bootstrap tooling, separate checking/build configurations, scripts and ignores.
+> 2. Implement playGame, internal scoring and game unit tests.
+> 3. Implement deck fetching, validation, timeout and unit tests.
+> 4. Implement CLI parsing, help, names and error/exit behavior with unit tests.
+> 5. Implement pure formatting and exact-output tests.
+> 6. Add compiled-CLI integration scenarios, four fixtures and one npm silent smoke.
+> 7. Verify the project, write README/AI history and prepare repository access.
+>
+> Use meaningful incremental commits. README should cover Node version, install,
+> build/run/test commands, URL/name/help options, architecture, rules/assumptions
+> and error behavior. Keep future UI/interactive/multiplayer ideas to a brief note;
+> do not implement them. Preserve the full AI conversation in AI_CONVERSATION.md
+> and add subsequent AI-assisted interactions before submission.
+>
+> ## Final verification and submission
+>
+> - [ ] From a clean checkout on Node 24, `npm ci`, `npm run check` and
+>   `npm run test:coverage` pass without pre-existing build output.
+> - [ ] Production output excludes tests; compiled imports run directly in Node;
+>   typechecking includes source/tests/config and lint/coverage checks pass.
+> - [ ] Unit and integration scenarios above pass, including all four fixtures,
+>   state/input invariants, exact output and the single npm silent smoke test.
+> - [ ] Manually verify the default endpoint, custom URL, names with both URL
+>   choices, and help without a network. Check success/error streams and exits.
+> - [ ] README commands work; source, tests, lockfile and build/run instructions
+>   are included. No secrets, dependencies or generated output are committed.
+> - [ ] AI_CONVERSATION.md contains the full conversation through submission.
+> - [ ] Git history is coherent; submit a GitHub/GitLab repository with access for
+>   every reviewer listed for that platform in REQUIREMENTS.md.
+> '''
+>
+> path = Path('IMPLEMENTATION_PLAN.md')
+> path.write_text(plan)
+> print(f'Updated {path}: {len(plan.splitlines())} lines.')
+> PY````
+> - Ran `git diff --check
+> git diff --stat
+> wc -l -w IMPLEMENTATION_PLAN.md
+> cat IMPLEMENTATION_PLAN.md`
+> - Ran ````git diff --name-only
+> python3 <<'PY'
+> import re
+> import subprocess
+> from pathlib import Path
+>
+> plan = Path('IMPLEMENTATION_PLAN.md').read_text()
+> previous = subprocess.check_output(['git', 'show', ':IMPLEMENTATION_PLAN.md'], text=True)
+> assert len(plan.splitlines()) <= 400
+> assert not re.search(r'\b[GDCFI]\d{2}\b', plan), 'Historical case IDs remain'
+> assert len(re.findall(r'^```', plan, re.M)) % 2 == 0
+>
+> for deck, player, dealer, winner in [
+>     ('H10, C6, D8, S7, HJ', 'Player | 26 | H10,C6,HJ', 'Dealer | 15 | D8,S7', 'Dealer'),
+>     ('H10, C7, S9, D8, CJ', 'Player | 17 | H10,C7', 'Dealer | 27 | S9,D8,CJ', 'Player'),
+>     ('HA, S10, DA, CK', 'Player | 21 | HA,S10', 'Dealer | 21 | DA,CK', 'Dealer'),
+>     ('H10, C6, D10, S7, H5, C4, D2', 'Player | 21 | H10,C6,H5', 'Dealer | 23 | D10,S7,C4,D2', 'Player'),
+> ]:
+>     assert f'Deck order: {deck}' in previous
+>     assert f'Deck: {deck}' in plan
+>     assert player in plan and dealer in plan
+>     assert f'Winner: {winner}\n{dealer}\n{player}' in plan
+> print('All four original deck orders and expected three-line outputs preserved exactly.')
+> for other_file in ['REQUIREMENTS.md', 'AI_CONVERSATION.md']:
+>     staged = subprocess.check_output(['git', 'show', f':{other_file}'])
+>     assert Path(other_file).read_bytes() == staged, other_file
+> print('Only the implementation plan changed; other documents match their staged content.')
+> print(f'Plan reduced from {len(previous.splitlines())} to {len(plan.splitlines())} lines.')
+> PY````
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+2 -2)
+> - Ran ````python3 <<'PY'
+> import re
+> import subprocess
+> from pathlib import Path
+>
+> plan = Path('IMPLEMENTATION_PLAN.md').read_text()
+> previous = subprocess.check_output(['git', 'show', ':IMPLEMENTATION_PLAN.md'], text=True)
+> assert len(plan.splitlines()) <= 400
+> assert 'Coverage IDs' not in plan
+> assert not re.search(r'^\| [GDCFI]\d{2}', plan, re.M)
+> assert len(re.findall(r'^```', plan, re.M)) % 2 == 0
+>
+> for deck, player, dealer, winner in [
+>     ('H10, C6, D8, S7, HJ', 'Player | 26 | H10,C6,HJ', 'Dealer | 15 | D8,S7', 'Dealer'),
+>     ('H10, C7, S9, D8, CJ', 'Player | 17 | H10,C7', 'Dealer | 27 | S9,D8,CJ', 'Player'),
+>     ('HA, S10, DA, CK', 'Player | 21 | HA,S10', 'Dealer | 21 | DA,CK', 'Dealer'),
+>     ('H10, C6, D10, S7, H5, C4, D2', 'Player | 21 | H10,C6,H5', 'Dealer | 23 | D10,S7,C4,D2', 'Player'),
+> ]:
+>     assert f'Deck order: {deck}' in previous
+>     assert f'Deck: {deck}' in plan
+>     assert f'Winner: {winner}\n{dealer}\n{player}' in plan
+> print('All four original deck orders and expected outputs preserved exactly.')
+> for other_file in ['REQUIREMENTS.md', 'AI_CONVERSATION.md']:
+>     staged = subprocess.check_output(['git', 'show', f':{other_file}'])
+>     assert Path(other_file).read_bytes() == staged, other_file
+> print('Other documents are unchanged; Markdown fences are balanced; historical test tables removed.')
+> print(f'Plan reduced from {len(previous.splitlines())} to {len(plan.splitlines())} lines ({100 * (1 - len(plan.splitlines()) / len(previous.splitlines())):.1f}% fewer).')
+> PY
+> git diff --check
+> git diff --name-only````
+>
+> </details>
+</details>
+
+Shortened [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) from **803 to 340 lines**.
+
+Removed repeated acceptance criteria, historical test IDs/matrices, duplicate examples and detailed commit suggestions. Consolidated testing into scenario lists and delivery checks into one checklist.
+
+Preserved functional requirements, agreed decisions, planned test coverage and all four fixtures. Verified fixture decks and outputs are unchanged.
+
+**Flagged omissions:** exact help wording and the separate optional property-based testing section were removed; required help behavior and invariant checks remain. Reviewer names now reference REQUIREMENTS.md. No important requirement or coverage loss found.
+
+Only the plan changed; `git diff --check` passes.
+
+> Ok. Looks good.
+>
+> Now let's start implemetation from the first step.
+>
+> I need to bootstrap the TypeScript/Node.js app, package.json, tsconfig files, ESLint, Vitest, npm scripts, gitignore and top folder structure -- src and test.
+>
+> Follow the implementation plan and keep setup at minimal as possible. Don't implement anything else.
+>
+> Install deps and make check the setup works as expected. Don't commit
+
+<details><summary>10 previous messages</summary>
+
+> I’ll bootstrap the tooling and folders from the plan, install the dependencies, and verify the setup. I’ll keep gameplay out of scope and won’t commit anything.
+>
+> <details><summary>Ran 4 commands, searched the web</summary>
+>
+> - Ran `for task_path in /AGENTS.md /Users/AGENTS.md /Users/antonkotliarenko/AGENTS.md /Users/antonkotliarenko/Projects/AGENTS.md; do if [ -f "$task_path" ]; then printf '\n%s\n' "$task_path"; cat "$task_path"; fi; done
+> ls -ld /opt/homebrew/opt/node@24 /usr/local/opt/node@24 /Users/antonkotliarenko/.nvm/versions/node /Users/antonkotliarenko/.local/share/fnm/node-versions /Users/antonkotliarenko/.volta/tools/image/node 2>/dev/null`
+>
+> - Ran `pwd
+> rg --files --hidden -g '!\.git/**' -g '!node_modules/**'
+> git status --short
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+>
+> - Ran `cat IMPLEMENTATION_PLAN.md
+> node --version
+> npm --version
+> command -v node
+> command -v npm`
+>
+> Searched the web for `site:typescript-eslint.io getting started flat config eslint 10 typescript 6 ...`
+>
+> - Ran `ls -la /Users/antonkotliarenko/.nvm/versions/node
+> ls -la /opt/homebrew/bin/node* /opt/homebrew/bin/npm
+> npm config get cache
+> npm config get registry`
+>
+> </details>
+>
+> Node 24 is already installed via nvm, so I’ll use it for installation and checks. I’ll use `test/` as you requested and add only an empty CLI entry point so the build and run scripts have a target.
+>
+> <details><summary>Created 9 files, edited a file, ran 6 commands, searched the web</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> export npm_config_cache=/private/tmp/blackjack-npm-cache
+> export npm_config_fetch_retries=0
+> export npm_config_fetch_timeout=15000
+> node --version
+> npm --version
+> npm view typescript version
+> npm view typescript-eslint version peerDependencies --json
+> npm view vitest version engines --json
+> npm view eslint version engines --json`
+>
+> Searched the web for `https://vitest.dev/config/passwithnotests.html`
+>
+> - Wrote `./.gitignore` (+3 -0)
+> - Wrote `./.nvmrc` (+1 -0)
+> - Wrote `./IMPLEMENTATION_PLAN.md` (+2 -2)
+> - Wrote `./eslint.config.mjs` (+11 -0)
+> - Wrote `./package.json` (+21 -0)
+> - Wrote `./src/cli.ts` (+2 -0)
+> - Wrote `./test/.gitkeep` (+0 -0)
+> - Wrote `./tsconfig.build.json` (+9 -0)
+> - Wrote `./tsconfig.json` (+12 -0)
+> - Wrote `./vitest.config.ts` (+14 -0)
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> export npm_config_cache=/private/tmp/blackjack-npm-cache
+> export npm_config_fetch_retries=0
+> export npm_config_fetch_timeout=30000
+> npm install --save-dev typescript tsx @types/node@24 eslint @eslint/js typescript-eslint vitest @vitest/coverage-v8`
+>
+> - Ran `cat package.json
+> cat tsconfig.json
+> cat tsconfig.build.json
+> cat eslint.config.mjs
+> cat vitest.config.ts
+> git status --short`
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm run check`
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm run test:coverage`
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> export npm_config_cache=/private/tmp/blackjack-npm-cache
+> npm ci --offline`
+>
+> </details>
+>
+> Dependencies are installed, and typecheck, lint, build, and the empty Vitest run pass. I’ll now verify test execution and coverage with temporary probes, including checks that TypeScript and ESLint reject errors. I’ll remove those probes before finishing.
+>
+> <details><summary>Ran a command</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> python3 <<'PY'
+> import json
+> import subprocess
+> import tempfile
+> from pathlib import Path
+>
+> created = []
+>
+> def temporary_file(folder, suffix, content):
+>     with tempfile.NamedTemporaryFile(mode='w', prefix='bootstrap_probe_', suffix=suffix, dir=folder, delete=False) as handle:
+>         handle.write(content)
+>         path = Path(handle.name)
+>     created.append(path)
+>     return path
+>
+> def run(args, expected=0, contains=None):
+>     result = subprocess.run(args, text=True, capture_output=True)
+>     output = result.stdout + result.stderr
+>     if result.returncode != expected or (contains is not None and contains not in output):
+>         print(output)
+>         raise AssertionError(f'{args} returned {result.returncode}; expected {expected}, marker {contains!r}')
+>     return result
+>
+> try:
+>     value_file = temporary_file('src', '.ts', 'export const runtimeVersion: number = 24;\n')
+>     entry_file = temporary_file('src', '.ts', f"import {{ runtimeVersion }} from './{value_file.stem}.js';\nexport const checkedRuntimeVersion: number = runtimeVersion;\n")
+>     valid_test = f"import {{ expect, it }} from 'vitest';\nimport {{ checkedRuntimeVersion }} from '../src/{entry_file.stem}.js';\nit('loads TypeScript ESM imports', () => {{\n  expect(checkedRuntimeVersion).toBe(24);\n}});\n"
+>     test_file = temporary_file('test', '.test.ts', valid_test)
+>
+>     run(['npm', 'run', 'check'])
+>     print('PASS: TypeScript, ESLint, build and a real Vitest test with relative .js imports.')
+>
+>     built_file = Path('dist') / entry_file.with_suffix('.js').name
+>     runtime = run(['node', '--input-type=module', '-e', f"const m = await import('./{built_file.as_posix()}'); console.log(m.checkedRuntimeVersion);"])
+>     assert runtime.stdout == '24\n'
+>     assert not (Path('dist') / 'test').exists()
+>     assert not (Path('dist') / 'vitest.config.js').exists()
+>     print('PASS: Compiled ESM imports execute directly in Node; test/config files are excluded from dist.')
+>
+>     test_file.write_text(valid_test.replace('toBe(24)', 'toBe(25)'))
+>     run(['node_modules/.bin/vitest', 'run'], expected=1, contains='AssertionError')
+>     test_file.write_text(valid_test)
+>     print('PASS: Vitest returns nonzero for a failing assertion.')
+>
+>     test_file.write_text(valid_test + "const invalid: number = 'not a number';\nvoid invalid;\n")
+>     run(['npm', 'run', 'typecheck'], expected=2, contains='TS2322')
+>     test_file.write_text(valid_test)
+>     print('PASS: Typechecking includes test files and rejects type errors.')
+>
+>     test_file.write_text(valid_test + 'const unusedBootstrapValue = 1;\n')
+>     run(['npm', 'run', 'lint'], expected=1, contains='@typescript-eslint/no-unused-vars')
+>     test_file.write_text(valid_test)
+>     print('PASS: ESLint checks TypeScript tests and rejects unused variables.')
+>
+>     run(['npm', 'run', 'test:coverage'])
+>     coverage_file = Path('coverage/coverage-final.json')
+>     assert coverage_file.is_file()
+>     coverage = json.loads(coverage_file.read_text())
+>     assert any(value_file.name in name for name in coverage)
+>     print('PASS: V8 coverage executes the test and writes a report for source files.')
+> finally:
+>     for path in reversed(created):
+>         path.unlink(missing_ok=True)
+>     print('Temporary bootstrap probes removed.')
+> PY`
+>
+> </details>
+>
+> The temporary probes passed: ESM imports work in Vitest and compiled Node output, typechecking includes test files, lint catches errors, and V8 coverage generates a report. I also verified a clean install from the lockfile. I’m running the final checks with only the bootstrap files left.
+>
+> <details><summary>Ran 2 commands</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> python3 <<'PY'
+> import json
+> import shutil
+> import subprocess
+> from pathlib import Path
+>
+> for generated in ['dist', 'coverage']:
+>     shutil.rmtree(generated, ignore_errors=True)
+>
+> commands = [
+>     ['npm', 'run', 'check'],
+>     ['npm', 'run', 'test:coverage'],
+>     ['npm', '--silent', 'run', 'dev'],
+>     ['npm', '--silent', 'start'],
+>     ['node', 'dist/cli.js'],
+>     ['npm', 'run', 'test:watch', '--', '--run'],
+> ]
+> for args in commands:
+>     result = subprocess.run(args, text=True, capture_output=True)
+>     if result.returncode:
+>         print(result.stdout + result.stderr)
+>         raise AssertionError(f'{args} failed with exit {result.returncode}')
+>     if args in commands[2:5]:
+>         assert not result.stdout and not result.stderr, (args, result.stdout, result.stderr)
+>     print(f'PASS: {" ".join(args)}')
+>
+> assert sorted(path.relative_to('dist').as_posix() for path in Path('dist').rglob('*') if path.is_file()) == ['cli.js']
+> assert Path('coverage/coverage-final.json').is_file()
+> assert not list(Path('src').glob('bootstrap_probe_*'))
+> assert not list(Path('test').glob('bootstrap_probe_*'))
+> package = json.loads(Path('package.json').read_text())
+> lock = json.loads(Path('package-lock.json').read_text())
+> assert not package.get('dependencies')
+> assert lock['packages']['']['devDependencies'] == package['devDependencies']
+> print('PASS: Only cli.js emitted; coverage report exists; no temporary probes or production dependencies.')
+> PY`
+> - Ran `git diff --check -- IMPLEMENTATION_PLAN.md
+> git diff -- IMPLEMENTATION_PLAN.md
+> git check-ignore node_modules dist coverage
+> rg --files --hidden -g '!\.git/**' -g '!node_modules/**' -g '!dist/**' -g '!coverage/**'
+> git status --short`
+>
+> </details>
+>
+> The build and coverage checks pass. The `tsx` dev launcher hit a sandbox restriction on its local IPC pipe; I’ll verify it outside the sandbox, then finish checking the run scripts.
+>
+> <details><summary>Ran 2 commands</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm --silent run dev`
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> python3 <<'PY'
+> import json
+> import subprocess
+> from pathlib import Path
+>
+> for args in [
+>     ['npm', '--silent', 'start'],
+>     ['node', 'dist/cli.js'],
+>     ['npm', 'run', 'test:watch', '--', '--run'],
+> ]:
+>     result = subprocess.run(args, text=True, capture_output=True)
+>     if result.returncode:
+>         print(result.stdout + result.stderr)
+>         raise AssertionError(f'{args} failed with exit {result.returncode}')
+>     if args[:2] != ['npm', 'run']:
+>         assert not result.stdout and not result.stderr, (args, result.stdout, result.stderr)
+>     print(f'PASS: {" ".join(args)}')
+>
+> assert sorted(path.relative_to('dist').as_posix() for path in Path('dist').rglob('*') if path.is_file()) == ['cli.js']
+> assert Path('coverage/coverage-final.json').is_file()
+> assert not list(Path('src').glob('bootstrap_probe_*'))
+> assert not list(Path('test').glob('bootstrap_probe_*'))
+> package = json.loads(Path('package.json').read_text())
+> lock = json.loads(Path('package-lock.json').read_text())
+> assert not package.get('dependencies')
+> assert lock['packages']['']['devDependencies'] == package['devDependencies']
+> print('PASS: Only cli.js emitted; coverage report exists; no temporary probes or production dependencies.')
+> PY`
+>
+> </details>
+</details>
+
+Bootstrap complete: [package.json](./package.json), lockfile, TypeScript configs, ESLint, Vitest, npm scripts, `.gitignore`, `.nvmrc`, `src/` and `test/`.
+
+Verified dependency installation, typecheck, lint, build, coverage, dev/start scripts, and temporary toolchain probes. The probes were removed.
+
+Run `nvm use` first. The CLI remains an empty placeholder; Vitest temporarily allows an empty suite.
+
+No gameplay implemented and no commits made.
