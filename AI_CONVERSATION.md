@@ -3362,3 +3362,358 @@ Moved the 0–3 card rejection cases from `game.test.ts` to `deck.test.ts`. Upda
 `npm run check` passes: **113 tests**, typecheck, lint and build.
 
 Only the two test files changed.
+
+> Inspect requirements.md and implementation_plan.md for the requirements and approach, create an implementation plan. Cli is gonna be the entry point to the app, takes two args - deck-url and optional player name. Provide -h usage guide. Validate arguments, fetch the deck (deck.ts), run the game (game.ts) and print out the result via formatter.md. Derive acceptance criteria from the requirements, suggest test cases in english. Additionally to the unit tests we're gonna need holistic integration tests for the app.
+
+<details><summary>7 previous messages</summary>
+
+> I’ll check the requirements, plan and module APIs, then propose the CLI implementation, acceptance criteria and unit/integration test scenarios. I won’t change any files.
+>
+> <details><summary>Ran 3 commands</summary>
+>
+> - Ran `cat REQUIREMENTS.md IMPLEMENTATION_PLAN.md`
+> - Ran `cat src/cli.ts src/deck.ts src/formatter.ts src/card.ts src/game.ts package.json tsconfig.build.json vitest.config.ts`
+> - Ran `git status --short; rg --files test; rg --files --hidden -g AGENTS.md -g '!node_modules' -g '!.git' -g '!.codex' -g '!.agents'`
+>
+> </details>
+>
+> Should the player name stay a `--name` option as in IMPLEMENTATION_PLAN.md, or become a second positional argument?
+> - Keep --name (recommended; also works with the default URL)
+> - Use a second positional argument
+>
+> **Should the player name stay a --name option as in IMPLEMENTATION_PLAN.md, or become a second positional argument?**
+>
+> Keep --name (recommended; also works with the default URL)
+>
+> I’ll keep `--name` as agreed. I also found that the plan still says the provider accepts empty and undersized decks; the proposal will reflect your latest change, which rejects decks with fewer than four cards in `deck.ts`.
+>
+> <details><summary>Explored 2 files, a search, ran a command</summary>
+>
+> <details><summary>Explored 2 files, a search</summary>
+>
+> - Searched for `main: boolean|isMainThread|main\??: boolean` in `module.d.ts`
+> - Read `./test/game.test.ts`
+> - Read `./test/deck.test.ts`
+>
+> </details>
+>
+> - Ran `/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin/node --input-type=module -e 'console.log(JSON.stringify({node: process.version, entryPoint: import.meta.main}))'`
+>
+> </details>
+>
+> The CLI can stay small: parse and validate arguments, call the three existing modules, then handle output and exit status. Unit tests will cover that coordination; integration tests will run the compiled app against a local HTTP server with no module mocks.
+</details>
+
+Keep the agreed interface:
+
+```text
+node dist/cli.js [deck-url] [--name <player-name>]
+npm --silent start -- [deck-url] [--name <player-name>]
+```
+
+The feature needs `src/cli.ts`, `test/cli.test.ts` and `test/integration.test.ts`. Existing npm scripts already build before testing.
+
+One correction to the existing plan: it still says empty decks are accepted by the provider. Follow your latest decision: `deck.ts` rejects decks containing fewer than four cards.
+
+The implementation would be:
+
+1. **Parse and validate arguments.**
+
+   Use native `parseArgs` with strict options, one optional positional URL, `--name`, and `-h`/`--help`.
+
+   Default the player name to `Player`. Allow `--name` before or after the URL. Reject missing, empty or whitespace-only names, pipe characters and control characters. Check forbidden characters before trimming, so surrounding tabs or newlines cannot disappear during validation. Preserve internal spaces and Unicode.
+
+   Leave URL validation and default endpoint selection in `fetchDeck`.
+
+2. **Provide help without starting a game.**
+
+   Proposed help:
+
+   ```text
+   Usage: node dist/cli.js [deck-url] [--name <player-name>]
+
+   deck-url       HTTP(S) endpoint returning a JSON deck.
+                  Default: https://sandbox.getunleash.io/blackjack/shuffle
+   --name <name>  Player's display name. Default: Player
+   -h, --help     Show this help and exit.
+
+   Plays one round automatically, without interactive input.
+   ```
+
+3. **Run the existing pipeline.**
+
+   Pass the URL, or `undefined`, to `fetchDeck`. Pass its returned deck directly to `playGame`, then pass the result and validated name to `formatGameResult` from `formatter.ts`.
+
+   Write the complete formatted result plus one newline to stdout. Keep scoring, winner selection and card formatting in their existing modules.
+
+4. **Handle execution and errors in one place.**
+
+   Export one `runCli(args)` function for unit testing, returning an exit code. Execute it when `cli.ts` is the entry point and assign its return value to `process.exitCode`.
+
+   Catch failures once, print a short diagnostic to stderr and return `1`. Importing the module must not fetch a deck or start a game.
+
+The acceptance criteria combine the required URL/game/output behavior with the agreed CLI options:
+
+| Situation | stdout | stderr | Exit |
+|---|---|---|---|
+| Successful game | Exactly three required lines and one final newline | Empty | `0` |
+| Help | Usage, options, defaults and automatic-game explanation | Empty | `0` |
+| Invalid arguments or name | Empty | Useful diagnostic | `1` |
+| Invalid URL, fetching or gameplay failure | Empty | Useful diagnostic | `1` |
+
+Additionally:
+
+- Omitted URL selects the existing default endpoint; an explicit URL overrides it.
+- Invalid arguments and names fail before fetching; invalid URLs fail before HTTP.
+- Custom names affect display only. Dealer remains `Dealer`, and winner roles remain unchanged.
+- Each game runs automatically, without retries, fallback requests, prompts or partial output.
+
+For **CLI unit tests**, mock the three existing modules and capture output:
+
+- **Valid argument combinations:** default/custom URL, default/custom name, and name before/after the URL. Include a trimmed name such as `"  Zoë 王  "`. Assert URL forwarding, unchanged deck/result forwarding, the formatter’s name argument and exactly one final newline.
+- **Both help flags:** return `0`, print the required help information and call none of the three modules.
+- **Invalid arguments:** unknown option, multiple positional URLs and missing `--name` value.
+- **Invalid names:** empty, whitespace-only, pipe, newline and tab—including control characters surrounding an otherwise valid name.
+- **Failures:** parameterize provider rejection and gameplay failure. Assert the diagnostic, empty stdout, exit `1`, and no calls to subsequent stages.
+
+For **integration tests**, build first and spawn `node dist/cli.js` against a local HTTP fixture server. Use the real provider, game and formatter. Capture stdout, stderr and the actual process exit code, with stdin closed.
+
+Use named, parameterized success cases with literal expected output:
+
+| Scenario | Deck | Expected Player hand | Expected Dealer hand | Winner |
+|---|---|---|---|---|
+| A: Player bust | `H10,C6,D8,S7,HJ` | `26: H10,C6,HJ` | `15: D8,S7` | Dealer |
+| B: Initial dealer tie, then bust | `H10,C7,S9,D8,CJ` | `17: H10,C7` | `27: S9,D8,CJ` | Player |
+| C: Both naturals | `HA,S10,DA,CK` | `21: HA,S10` | `21: DA,CK` | Dealer |
+| D: Three-card 21 and dealer tie | `H10,C6,D10,S7,H5,C4,D2` | `21: H10,C6,H5` | `23: D10,S7,C4,D2` | Player |
+| Player-only natural | `HA,S10,D9,C7` | `21: HA,S10` | `16: D9,C7` | Player |
+| Dealer-only natural | `H10,C6,DA,SK` | `16: H10,C6` | `21: DA,SK` | Dealer |
+| Multiple player hits; Dealer already ahead | `H2,C3,D10,S8,H2,H10` | `17: H2,C3,H2,H10` | `18: D10,S8` | Dealer |
+| Dealer hits through a tie, then leads | `H10,C8,S10,D6,H2,C2` | `18: H10,C8` | `20: S10,D6,H2,C2` | Dealer |
+| Two Aces remain 22; both bust | `HA,CA,DA,SA` | `22: HA,CA` | `22: DA,SA` | Dealer |
+
+Every success checks the entire output byte-for-byte, empty stderr and exit `0`.
+
+Also cover:
+
+- Custom Unicode names for both winner roles; verify trimming and placement.
+- Both help flags with a local URL supplied; the server receives no request.
+- Representative invalid arguments/names, malformed URL and unsupported protocol.
+- HTTP `500`, malformed JSON, invalid card data and an undersized deck.
+- A stalled response body: the real 10-second timeout produces an error and exits. Give this test a longer deadline and clean up server connections.
+- Midgame exhaustion using `H8,C8,D8,S8`, with no fabricated result.
+- Identical output from separate processes given the same fixture.
+- Exactly one npm smoke test: Fixture D through `npm --silent start`, using `--name "Alex Smith"` and checking the exact output without npm banners.
+
+Finish with `npm run check` and `npm run test:coverage`. No new dependencies or script changes are needed.
+
+> Yes, follow my implementation regarding 4 cards in deck.ts.
+> In you proposal integration test cases covering the logic we've already covered in unit tests, we don't need that, instead, let's focus on main end to end use cases, e.g. fixtures A - D is enough.
+> Let's skip real 10s timout test, it's already covered in units. Use async spawn for cli integration tests against a local server.
+>
+> The rest looks good. Pls implement.
+
+<details><summary>8 previous messages</summary>
+
+> I’ll implement the CLI and unit tests, then add integration tests using async `spawn` and a local HTTP server. I’ll keep gameplay coverage to fixtures A–D, retain the four-card check in `deck.ts`, and skip the real timeout test.
+>
+> <details><summary>Explored 2 files, a list, ran 2 commands</summary>
+>
+> <details><summary>Explored 2 files</summary>
+>
+> - Read `./test/game.test.ts`
+> - Read `./test/formatter.test.ts`
+>
+> </details>
+>
+> - Ran `cat src/cli.ts src/deck.ts src/formatter.ts src/card.ts package.json tsconfig.json tsconfig.build.json vitest.config.ts eslint.config.mjs`
+>
+> - Ran `git status --short`
+>
+> <details><summary>Explored a list</summary>
+>
+> - Listed files
+>
+> </details>
+>
+> </details>
+>
+> I’ll keep the CLI to one testable function and a small entry-point check. The integration suite will cover fixtures A–D, custom names, help, representative failures, repeatability and one npm smoke test. It will use the existing build scripts.
+>
+> <details><summary>Created 2 files, edited a file, ran 2 commands</summary>
+>
+> - Ran `python3 - <<'PY'
+> from pathlib import Path
+> import hashlib, json
+> excluded = {'.git', 'node_modules', 'dist', 'coverage', '.codex', '.agents'}
+> files = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('.').rglob('*') if not any(part in excluded for part in p.parts) and p.is_file()}
+> Path('/private/tmp/blackjack-cli-baseline.json').write_text(json.dumps(files))
+> print(f'Saved baseline for {len(files)} project files.')
+> PY`
+> - Wrote `./src/cli.ts` (+56 -2)
+> - Wrote `./test/cli.test.ts` (+107 -0)
+> - Wrote `./test/integration.test.ts` (+168 -0)
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run check`
+>
+> </details>
+>
+> The 19 new CLI unit tests pass, along with the existing tests, typecheck, lint and build. The integration suite was blocked because the sandbox prevents listening on `127.0.0.1`. I’ll rerun it with permission to bind the local fixture server.
+>
+> <details><summary>Ran a command</summary>
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run test:coverage`
+>
+> </details>
+>
+> All 150 tests now pass with the local server enabled, including fixtures A–D and the npm smoke test. I’m checking the development command and final file scope. I’ll also add the unsupported-protocol case from the approved proposal to the integration tests.
+>
+> <details><summary>Edited a file, ran 4 commands</summary>
+>
+> - Wrote `./test/integration.test.ts` (+1 -0)
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run check`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run dev -- --help`
+> - Ran `git diff --check`
+> - Ran `python3 - <<'PY'
+> from pathlib import Path
+> import hashlib, json
+> baseline = json.loads(Path('/private/tmp/blackjack-cli-baseline.json').read_text())
+> excluded = {'.git', 'node_modules', 'dist', 'coverage', '.codex', '.agents'}
+> current = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('.').rglob('*') if not any(part in excluded for part in p.parts) and p.is_file()}
+> changes = sorted(p for p in baseline.keys() | current.keys() if baseline.get(p) != current.get(p))
+> print('Changed files:', ', '.join(changes))
+> assert changes == ['src/cli.ts', 'test/cli.test.ts', 'test/integration.test.ts']
+> for name in changes:
+>     print(f'{name}: {len(Path(name).read_text().splitlines())} lines')
+> PY`
+>
+> </details>
+</details>
+
+Implemented [cli.ts](./src/cli.ts) with argument validation, `--name`, help, automatic gameplay, formatted output and error handling.
+
+Added:
+
+- [CLI unit tests](./test/cli.test.ts).
+- [Integration tests](./test/integration.test.ts) using async `spawn`, a local server, fixtures A–D and one npm smoke test.
+
+`npm run check` passes: **151 tests**, typecheck, lint and build. Development help also works.
+
+Only these three files changed. No commits made.
+
+> Good, there's a duplication of --name fallbacks in cli and formatter, let's keep it in formatter only.
+
+<details><summary>2 previous messages</summary>
+
+> I’ll remove the CLI’s `Player` fallback, pass `undefined` to the formatter when `--name` is omitted, and update the tests. Supplied names will still be validated and trimmed.
+>
+> <details><summary>Edited 2 files, explored 2 files, ran 3 commands</summary>
+>
+> - Ran `cat src/cli.ts src/formatter.ts`
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./test/cli.test.ts`
+>
+> </details>
+>
+> - Ran `git status --short`
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./package.json`
+>
+> </details>
+>
+> - Wrote `./src/cli.ts` (+4 -4)
+> - Wrote `./test/cli.test.ts` (+2 -2)
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run check`
+>
+> </details>
+</details>
+
+Removed the CLI fallback. It now passes `undefined` when `--name` is omitted, so only the formatter defaults to `Player`. Supplied names are still validated and trimmed.
+
+Updated the unit expectations. `npm run check` passes, including all **151 tests**.
+
+> Good.
+> Create a concise README.MD following requirements.md take into account the actual implementation. Include brief project description and game rules,  prereqs - at least node 24.2.0 for 'import.meta.main' support, install, build, run instructions with short examples, cover cli args, expected output, how to run test, linters etc. Also include brief project structure. Keep it short and informative.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll check the current implementation and npm scripts, then write a concise README covering setup, usage, rules, checks and project structure.
+>
+> <details><summary>Ran 3 commands</summary>
+>
+> - Ran `cat src/game.ts src/card.ts tsconfig.json tsconfig.build.json vitest.config.ts .nvmrc .gitignore`
+> - Ran `cat REQUIREMENTS.md package.json src/cli.ts src/deck.ts src/formatter.ts`
+> - Ran `rg --files -g '!package-lock.json'; git status --short`
+>
+> </details>
+>
+> I’m including the four-card minimum, default endpoint, automatic game rules and output/error behavior. The README will also list the existing development and check commands. I’ll leave the implementation unchanged.
+>
+> <details><summary>Created a file, ran 3 commands</summary>
+>
+> - Wrote `./README.MD` (+105 -0)
+> - Ran `git diff --check`
+> - Ran `git status --short`
+> - Ran ````python3 - <<'PY'
+> from pathlib import Path
+> import json, re
+> readme = Path('README.MD').read_text()
+> scripts = json.loads(Path('package.json').read_text())['scripts']
+> commands = sorted(set(re.findall(r'npm run ([a-z:]+)', readme)))
+> assert set(commands) <= scripts.keys(), f'Unknown scripts: {set(commands) - scripts.keys()}'
+> for target in re.findall(r'\]\(([^)]+\.md)\)', readme):
+>     assert Path(target).is_file(), f'Missing linked document: {target}'
+> assert readme.count('```') % 2 == 0
+> print(f'README: {len(readme.splitlines())} lines, {len(readme.split())} words.')
+> print('Documented npm scripts and local links match the project.')
+> PY````
+>
+> </details>
+</details>
+
+Created [README.MD](./README.MD) covering prerequisites, setup, CLI examples, rules, output, error handling, checks and project structure.
+
+Verified documented scripts and links against the project. Only the README was added.
+
+> I need you to simplify readme significantly. It contains too much details and reads more like a tech spec. I want it to be ideally less than 50lines, treat it as an introductory information about the project for a developer that opens it for the first time. Explain what is it, how it works, prereqs, quick start. Game rules can be explained in the description or close by. Leave out obvious info. Pls proceed
+
+<details><summary>2 previous messages</summary>
+
+> I’ll cut it to under 50 lines, keeping the introduction, brief game rules, prerequisites, quick start and essential check commands.
+>
+> <details><summary>Edited a file, explored 2 files, ran 2 commands</summary>
+>
+> <details><summary>Explored 2 files</summary>
+>
+> - Read `./package.json`
+> - Read `./README.MD`
+>
+> </details>
+>
+> - Ran `git status --short`
+>
+> - Wrote `./README.md` (+23 -84)
+>
+> - Ran ````python3 - <<'PY'
+> from pathlib import Path
+> import json, re
+> path = Path('README.md')
+> text = path.read_text()
+> scripts = json.loads(Path('package.json').read_text())['scripts']
+> lines = len(text.splitlines())
+> assert lines < 50, lines
+> assert set(re.findall(r'npm run ([a-z:]+)', text)) <= scripts.keys()
+> assert text.count('```') % 2 == 0
+> print(f'README: {lines} lines, {len(text.split())} words.')
+> PY````
+>
+> - Wrote `./README.md` (+4 -4)
+>
+> </details>
+</details>
+
+Shortened [README.md](./README.md) to **44 lines**, keeping the introduction, brief rules, prerequisites, quick start and essential development commands. Removed the detailed specification content.
