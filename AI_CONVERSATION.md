@@ -2367,3 +2367,623 @@ Verified dependency installation, typecheck, lint, build, coverage, dev/start sc
 Run `nvm use` first. The CLI remains an empty placeholder; Vitest temporarily allows an empty suite.
 
 No gameplay implemented and no commits made.
+
+> please review my implementation of game.ts according to the impelentation plan and cross-check with requirements.md. Internal implementation and methods are a bit different, that's ok, as long as the it satisfies the requirements. Focus on edge cases. Any unnecessary complexity? Don't modify files, don't suggest anything without clear benefit
+
+<details><summary>3 previous messages</summary>
+
+> I’ll compare `game.ts` with the plan and requirements, focusing on edge cases and complexity that has a concrete cost. I won’t modify files.
+>
+> <details><summary>Explored 7 files, ran 4 commands</summary>
+>
+> <details><summary>Explored 7 files</summary>
+>
+> - Read `./REQUIREMENTS.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+> - Read `./src/game.ts`
+> - Read `./src/card.ts`
+> - Read `./package.json`
+> - Read `./tsconfig.json`
+> - Read `./vitest.config.ts`
+>
+> </details>
+>
+> - Ran `rg --files --hidden -g '!\.git/**' -g '!node_modules/**' -g '!dist/**' -g '!coverage/**'
+> git status --short
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+>
+> - Ran ``export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> node --input-type=module <<'JS'
+> import { playGame } from './src/game.ts';
+> const suits = { H: 'HEARTS', C: 'CLUBS', D: 'DIAMONDS', S: 'SPADES' };
+> const cards = text => text.split(',').map(token => ({ suit: suits[token[0]], value: token.slice(1) }));
+> const score = hand => hand.reduce((sum, card) => sum + ({ J: 10, Q: 10, K: 10, A: 11 }[card.value] ?? Number(card.value)), 0);
+> function probe(name, text, options = {}) {
+>   const deck = cards(text);
+>   if (options.reverse) deck.reverse();
+>   if (options.freeze) Object.freeze(deck);
+>   try {
+>     const result = playGame(deck);
+>     console.log(JSON.stringify({ name, result: result ?? null, computedScores: result ? { player: score(result.player.cards), dealer: score(result.dealer.cards) } : null, remaining: deck.length }));
+>   } catch (error) {
+>     console.log(JSON.stringify({ name, error: `${error.name}: ${error.message}`, remaining: deck.length }));
+>   }
+> }
+> probe('Fixture A as documented: expected dealer, player 26/dealer 15', 'H10,C6,D8,S7,HJ');
+> probe('Fixture B as documented: expected player, player 17/dealer 27', 'H10,C7,S9,D8,CJ');
+> probe('Fixture C as documented: expected dealer, both 21', 'HA,S10,DA,CK');
+> probe('Fixture D as documented: expected player, player 21/dealer 23', 'H10,C6,D10,S7,H5,C4,D2');
+> probe('Dealer already ahead; symmetric deck removes draw-order ambiguity', 'H7,C10,D8,C10,H7');
+> probe('Exhaustion during player turn', 'H8,C8,C8,H8');
+> probe('Exhaustion during dealer turn', 'H10,C7,H10,C7');
+> probe('Frozen caller deck', 'HA,S10,DA,CK', { freeze: true });
+> probe('Both initially bust', 'HA,CA,DA,SA');
+> probe('Fixture D with input reversed only to isolate remaining turn logic', 'H10,C6,D10,S7,H5,C4,D2', { reverse: true });
+> probe('Player bust still beats initial dealer bust; reverse only isolates turn logic', 'H10,C6,DA,SA,HA', { reverse: true });
+> probe('Initial dealer bust after player survives; reverse only isolates turn logic', 'H10,C6,DA,SA,H2', { reverse: true });
+> JS``
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> node --input-type=module <<'JS'
+> import ts from 'typescript';
+> const configFile = ts.readConfigFile('tsconfig.build.json', ts.sys.readFile);
+> const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, process.cwd());
+> const program = ts.createProgram(parsed.fileNames, parsed.options);
+> const diagnostics = ts.getPreEmitDiagnostics(program);
+> console.log('Build configuration diagnostics (no emit performed):');
+> if (diagnostics.length) {
+>   console.log(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+>     getCanonicalFileName: path => path,
+>     getCurrentDirectory: () => process.cwd(),
+>     getNewLine: () => '\n',
+>   }));
+> } else {
+>   console.log('None');
+> }
+> JS
+> npm --silent run typecheck
+> npm --silent run lint`
+>
+> - Ran `nl -ba tsconfig.json
+> cat tsconfig.build.json
+> git status --short`
+>
+> </details>
+>
+> I reproduced three defects: draws come from the end and mutate the input deck, non-bust dealer wins return `undefined`, and exhaustion crashes while scoring. I also found a result-contract mismatch and a build configuration error. The turn loops and Blackjack/bust precedence otherwise look correct.
+</details>
+
+I found five concrete issues:
+
+1. **[P1] Cards are drawn in reverse order, and the caller’s deck is mutated.**
+   [`drawCard()` uses `pop()`](./src/game.ts:61), which consumes the last card first. Fixture A consequently produces a Player victory instead of Dealer; Fixture D produces Dealer instead of Player. It also prevents safely reusing the same input and throws on frozen arrays. Use a local cursor into the original deck, as agreed.
+
+2. **[P1] Non-bust dealer victories return `undefined`.**
+   After [`dealerTurn()`](./src/game.ts:46), only dealer bust returns a result. If Player has 17 and Dealer has 18, execution falls through. This also affects Dealer becoming strictly ahead after drawing. Return the dealer result on that path. An explicit `playGame(...): GameResult` return type would make TypeScript catch this omission.
+
+3. **[P1] The production build configuration fails validation.**
+   [`allowImportingTsExtensions`](./tsconfig.json:9) conflicts with the build configuration’s enabled JavaScript emission, producing **TS5096**. The simplest fix is changing the [type import](./src/game.ts:1) to `./card.js` and removing that option. NodeNext resolves the source correctly.
+
+4. **[P2] Exhaustion during either turn produces an accidental `TypeError`.**
+   The [`pop()!` assertion](./src/game.ts:62) does not check availability at runtime. Four eights reproduce player-turn exhaustion; two hands totaling 17 reproduce dealer-turn exhaustion. Both eventually crash on `undefined.value`. Check availability inside `drawCard()` and throw the descriptive exhaustion error there. The initial length check only protects the first deal.
+
+5. **[P2] The returned result differs from the agreed formatter contract.**
+   [`GameResult`](./src/game.ts:12) uses uppercase winner values and omits hand scores. The plan requires `'player' | 'dealer'` and a score alongside each hand. Calculating those scores in the existing `createResult()` helper keeps scoring inside GameService and avoids duplicating it in the formatter.
+
+The helper structure is reasonable; I see no unnecessary complexity worth removing. Fixed-Ace scoring, both-natural precedence, player-bust precedence and dealer tie handling are correct. The score-only Blackjack check is safe because it runs only after the two-card initial deal.
+
+I exercised all four fixtures and additional edge cases in memory. Typecheck and lint pass; build diagnostics report the configuration error above. No files changed.
+
+> Good, I've fixed point 1, 2. Point 3 - go ahead and implement the fix. Point 4 - pls throw the err msg, 5 - disregard for now.
+
+<details><summary>2 previous messages</summary>
+
+> I’ll check your latest changes, fix the TypeScript import/build configuration, and add a descriptive deck-exhaustion error. I’ll leave the result shape unchanged.
+>
+> <details><summary>Created a file, edited 3 files, ran 4 commands</summary>
+>
+> - Ran `rg -n "from ['\"][^'\"]+\.ts['\"]|allowImportingTsExtensions|rewriteRelativeImportExtensions|drawCard|Not enough|exhaust" src test tsconfig*.json
+> cat .nvmrc
+> cat vitest.config.ts`
+> - Ran `git status --short
+> nl -ba src/game.ts
+> cat src/card.ts
+> cat tsconfig.json
+> cat tsconfig.build.json
+> cat package.json
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+> - Wrote `./src/game.ts` (+8 -2)
+> - Wrote `./test/game.test.ts` (+12 -0)
+> - Wrote `./tsconfig.json` (+1 -2)
+> - Wrote `./vitest.config.ts` (+0 -2)
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm run check`
+> - Ran ``export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> node --input-type=module <<'JS'
+> import assert from 'node:assert/strict';
+> import { playGame } from './dist/game.js';
+> const suits = { H: 'HEARTS', C: 'CLUBS', D: 'DIAMONDS', S: 'SPADES' };
+> const initials = { HEARTS: 'H', CLUBS: 'C', DIAMONDS: 'D', SPADES: 'S' };
+> const cases = [
+>   ['A', 'H10,C6,D8,S7,HJ', 'Dealer', 'H10,C6,HJ', 'D8,S7'],
+>   ['B', 'H10,C7,S9,D8,CJ', 'Player', 'H10,C7', 'S9,D8,CJ'],
+>   ['C', 'HA,S10,DA,CK', 'Dealer', 'HA,S10', 'DA,CK'],
+>   ['D', 'H10,C6,D10,S7,H5,C4,D2', 'Player', 'H10,C6,H5', 'D10,S7,C4,D2'],
+>   ['dealer ahead', 'H10,C7,S10,D8', 'Dealer', 'H10,C7', 'S10,D8'],
+> ];
+> for (const [name, order, winner, player, dealer] of cases) {
+>   const deck = order.split(',').map(card => ({ suit: suits[card[0]], value: card.slice(1) }));
+>   const result = playGame(deck);
+>   const serialize = hand => hand.map(card => initials[card.suit] + card.value).join(',');
+>   assert.equal(result.winner, winner);
+>   assert.equal(serialize(result.player.cards), player);
+>   assert.equal(serialize(result.dealer.cards), dealer);
+>   console.log(`PASS: compiled Node module, fixture ${name}`);
+> }
+> JS
+> git diff --check
+> git status --short
+> git diff --stat
+> nl -ba src/game.ts | sed -n '60,76p'``
+>
+> </details>
+</details>
+
+Implemented points 3 and 4:
+
+- Changed the import to `./card.js` and removed `allowImportingTsExtensions`.
+- Added `Error("Deck exhausted: no cards left to draw.")`.
+- Added two exhaustion regression tests.
+
+`npm run check` passes. All four fixtures and a dealer-ahead case also pass against compiled JavaScript. Point 5 remains unchanged. No commits made.
+
+One remaining issue from point 1: `shift()` still mutates the caller’s deck.
+
+> shift is correct here, if you're warning about the fact we're mutating the original deck argument - that's correct, I've made a copy. Pls check. Any other issues? If not, propose unit test scenarios for playGame(), and the rest of helpers (we'll export them). Get the expected behavior directly from the requirements, not from my implemnetation. Cover important edge cases. Pls keep the test suite compact, use paramerization when appropriate. For non-trivial scenarios provide the deck, expected winner, scores and cards. Give me test scenarios in plain text first. Don't code anything.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll check the deck copy and current logic, then propose a compact test suite based on the requirements. I’ll include exact decks and expected results for the non-trivial cases, without changing files.
+>
+> <details><summary>Explored 2 files, ran a command</summary>
+>
+> <details><summary>Explored 2 files</summary>
+>
+> - Read `./REQUIREMENTS.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `nl -ba src/game.ts
+> nl -ba src/card.ts
+> cat test/game.test.ts
+> cat tsconfig.json
+> cat tsconfig.build.json
+> git status --short
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+>
+> </details>
+>
+> The local copy protects the caller’s deck, so `shift()` is fine here. I haven’t found another gameplay defect. One caveat for exported helpers: the score-only Blackjack check assumes an initial two-card hand; three-card 21 should be tested through `playGame()`. I’m checking the proposed fixture totals and hand allocations now.
+>
+> <details><summary>Ran a command</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> node --input-type=module <<'JS'
+> import assert from 'node:assert/strict';
+> import { playGame } from './src/game.ts';
+> const suits = { H: 'HEARTS', C: 'CLUBS', D: 'DIAMONDS', S: 'SPADES' };
+> const initials = { HEARTS: 'H', CLUBS: 'C', DIAMONDS: 'D', SPADES: 'S' };
+> const parse = text => text.split(',').filter(Boolean).map(card => ({ suit: suits[card[0]], value: card.slice(1) }));
+> const serialize = hand => hand.map(card => initials[card.suit] + card.value).join(',');
+> const total = hand => hand.reduce((sum, card) => sum + ({ J: 10, Q: 10, K: 10, A: 11 }[card.value] ?? Number(card.value)), 0);
+> const fixtures = [
+>   ['Player natural', 'HA,S10,D9,C7', 'Player', 21, 'HA,S10', 16, 'D9,C7'],
+>   ['Dealer natural', 'H10,C6,DA,SK', 'Dealer', 16, 'H10,C6', 21, 'DA,SK'],
+>   ['Both natural C', 'HA,S10,DA,CK', 'Dealer', 21, 'HA,S10', 21, 'DA,CK'],
+>   ['Player bust A', 'H10,C6,D8,S7,HJ', 'Dealer', 26, 'H10,C6,HJ', 15, 'D8,S7'],
+>   ['Dealer bust B', 'H10,C7,S9,D8,CJ', 'Player', 17, 'H10,C7', 27, 'S9,D8,CJ'],
+>   ['Three-card 21 D', 'H10,C6,D10,S7,H5,C4,D2', 'Player', 21, 'H10,C6,H5', 23, 'D10,S7,C4,D2'],
+>   ['Dealer already ahead', 'H10,C7,S10,D8', 'Dealer', 17, 'H10,C7', 18, 'S10,D8'],
+>   ['Dealer multiple hits', 'H10,C8,S10,D6,H2,C2', 'Dealer', 18, 'H10,C8', 20, 'S10,D6,H2,C2'],
+>   ['Player multiple hits, duplicates', 'H2,C3,D10,S8,H2,H10', 'Dealer', 17, 'H2,C3,H2,H10', 18, 'D10,S8'],
+>   ['Both initial bust', 'HA,CA,DA,SA', 'Dealer', 22, 'HA,CA', 22, 'DA,SA'],
+>   ['Initial dealer bust; player survives', 'H10,C6,DA,SA,H2', 'Player', 18, 'H10,C6,H2', 22, 'DA,SA'],
+>   ['Initial dealer bust; player busts', 'H10,C6,DA,SA,HA', 'Dealer', 27, 'H10,C6,HA', 22, 'DA,SA'],
+> ];
+> for (const [name, order, winner, playerScore, playerHand, dealerScore, dealerHand] of fixtures) {
+>   const deck = parse(order);
+>   const before = JSON.stringify(deck);
+>   deck.forEach(Object.freeze);
+>   Object.freeze(deck);
+>   const result = playGame(deck);
+>   assert.equal(result.winner, winner, name);
+>   assert.equal(serialize(result.player.cards), playerHand, name);
+>   assert.equal(serialize(result.dealer.cards), dealerHand, name);
+>   assert.equal(total(parse(playerHand)), playerScore, name);
+>   assert.equal(total(parse(dealerHand)), dealerScore, name);
+>   assert.equal(JSON.stringify(deck), before, name);
+>   assert.deepEqual(playGame(deck), result, name);
+> }
+> for (const order of ['', 'HA', 'HA,S10', 'HA,S10,D9', 'H8,C8,D8,S8', 'H10,C7,D10,S7']) {
+>   const deck = parse(order);
+>   const before = JSON.stringify(deck);
+>   assert.throws(() => playGame(deck), Error);
+>   assert.equal(JSON.stringify(deck), before);
+> }
+> const base = parse('H10,C6,D10,S7,H5,C4,D2');
+> assert.deepEqual(playGame([...base, ...parse('H3')]), playGame(base));
+> console.log('Verified 12 requirement-based outcome fixtures, frozen input, repeated calls, 6 exhaustion inputs and unused trailing cards. No files written.');
+> JS
+> git status --short`
+>
+> </details>
+</details>
+
+Yes—the copy at [game.ts:34](./src/game.ts:34) protects the original deck. `shift()` is appropriate here; a shallow copy is sufficient because the card objects are only read. I verified frozen input and repeated calls. I found no further gameplay defects for valid cards.
+
+One caveat when exporting helpers: `isBlackjack(score)` assumes an **initial two-card hand**. Keep that precondition explicit; a score alone cannot distinguish natural Blackjack from three-card 21.
+
+The outcomes below come from the [requirements](./REQUIREMENTS.md:16). Exhaustion and input immutability are additional agreed plan contracts. Scores are fixed expected totals, without requiring changes to your current result shape.
+
+Use one parameterized `playGame()` success table:
+
+| Scenario | Deck, first card first | Winner | Player: score — cards | Dealer: score — cards |
+|---|---|---|---|---|
+| Player natural | HA,S10,D9,C7 | Player | 21 — HA,S10 | 16 — D9,C7 |
+| Dealer natural | H10,C6,DA,SK | Dealer | 16 — H10,C6 | 21 — DA,SK |
+| Both natural — fixture C | HA,S10,DA,CK | Dealer | 21 — HA,S10 | 21 — DA,CK |
+| Player bust — fixture A | H10,C6,D8,S7,HJ | Dealer | 26 — H10,C6,HJ | 15 — D8,S7 |
+| Dealer bust on initial tie — fixture B | H10,C7,S9,D8,CJ | Player | 17 — H10,C7 | 27 — S9,D8,CJ |
+| Three-card 21 and subsequent tie — fixture D | H10,C6,D10,S7,H5,C4,D2 | Player | 21 — H10,C6,H5 | 23 — D10,S7,C4,D2 |
+| Dealer already ahead | H10,C7,S10,D8 | Dealer | 17 — H10,C7 | 18 — S10,D8 |
+| Dealer draws, ties, then becomes strictly ahead | H10,C8,S10,D6,H2,C2 | Dealer | 18 — H10,C8 | 20 — S10,D6,H2,C2 |
+| Player needs multiple hits to reach exactly 17 | H2,C3,D10,S8,H2,H10 | Dealer | 17 — H2,C3,H2,H10 | 18 — D10,S8 |
+| Both initially bust | HA,CA,DA,SA | Dealer | 22 — HA,CA | 22 — DA,SA |
+| Dealer initially bust; Player must still finish | H10,C6,DA,SA,H2 | Player | 18 — H10,C6,H2 | 22 — DA,SA |
+| Dealer initially bust; Player subsequently busts | H10,C6,DA,SA,HA | Dealer | 27 — H10,C6,HA | 22 — DA,SA |
+
+The repeated H2 deliberately covers duplicate-card acceptance. Exactly sized decks also expose unwanted extra draws.
+
+Add one parameterized failure group:
+
+- Initial deck lengths **0, 1, 2 and 3**: throw a descriptive error. Use prefixes of HA,S10,D9 so the two-card case proves Player’s natural cannot bypass Dealer’s initial deal.
+- Player-turn exhaustion: **H8,C8,D8,S8**. Initial hands are Player 16 — H8,C8 and Dealer 16 — D8,S8. Player needs another card; throw, with no result.
+- Dealer-turn exhaustion: **H10,C7,D10,S7**. Both have 17; Dealer must draw on the tie. Throw, with no result.
+
+Add shared assertions rather than separate fixture sets:
+
+- Original deck and card objects remain unchanged after success and failure.
+- Repeated calls with the same deck produce equal results; a failed call does not affect a subsequent valid game.
+- Appending an unused H3 to fixture D leaves its result unchanged.
+
+For the helpers, reuse these fixtures where possible:
+
+| Helper | Compact scenarios and expected behavior |
+|---|---|
+| `calculateScores()` | Parameterize all 13 ranks: 2–10 retain numeric value; J/Q/K → 10; A → 11. Add HA,CA → **22** and the requirements’ example S7,S10,CJ → **27** to cover summation and fixed Aces. |
+| `drawCard()` | Working deck H2,C3: successive draws return H2, then C3, preserving order and removing those entries. Another draw throws a descriptive exhaustion error. |
+| `initialDraw()` | Use fixture A: Player receives H10,C6 (**16**); Dealer receives D8,S7 (**15**); working deck retains HJ. No winner is resolved yet. |
+| `isBlackjack()` | Under its initial-two-card precondition, parameterize scores **20 → false, 21 → true, 22 → false**. Cover the three-card distinction through fixture D. |
+| `checkBlackjack()` | Reuse the three natural rows above. Add Player H10,C7 and Dealer S10,D8: **no Blackjack resolution**, so ordinary gameplay continues. |
+| `playerTurn()` | Reuse A for bust, D for three-card 21, and the multiple-hit fixture for reaching exactly 17. Add a small standing table: H10 paired with C7/C8/C9/CK gives **17/18/19/20**; working deck H2,H3 stays untouched. |
+| `dealerTurn()` | Reuse B for initial tie/bust, D for a tie reached during drawing, the already-ahead row for no draw, and the multiple-dealer-hit row for stopping strictly ahead. Add Player 18 versus Dealer DA,SA (**22**): no dealer draw. |
+| `isBust()` | Parameterize H10,C10 (**20 → false**), HA,S10 (**21 → false**), and HA,CA (**22 → true**). |
+| `createResult()` | Covered by the exact winner/hand assertions in `playGame()` tests. A separate pass-through test adds no behavioral coverage. |
+
+Hard-code expected winners, totals and card lists from these scenarios; don’t generate expected values using the production helpers.
+
+No files changed.
+
+> I've refactored game.ts a bit, do another round of evaluation.
+> Test suits make sense. Pls adjust the suggestion for the methods changed.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll review the refactored game logic and adjust the proposed tests for the changed helpers. I won’t modify files.
+>
+> <details><summary>Explored 2 files, a list, ran a command</summary>
+>
+> <details><summary>Explored 2 files, a list</summary>
+>
+> - Read `./REQUIREMENTS.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+> - Listed files
+>
+> </details>
+>
+> - Ran `nl -ba src/game.ts
+> nl -ba src/card.ts
+> cat test/game.test.ts
+> cat tsconfig.json
+> cat package.json
+> git status --short
+> if [ -f AGENTS.md ]; then cat AGENTS.md; fi`
+>
+> </details>
+>
+> The return values now let the game tests assert scores directly, and the winner roles match the plan. The main test changes are to move per-rank checks to `getCardScore()`, assert the scores returned by both turn helpers, and test `createResult()`’s score defaults and copied hand arrays. The previous game fixtures still apply.
+>
+> <details><summary>Ran 3 commands</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm --silent run typecheck
+> npm --silent run lint`
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> node --input-type=module <<'JS'
+> import assert from 'node:assert/strict';
+> import { readFile } from 'node:fs/promises';
+> import ts from 'typescript';
+> import { playGame } from './src/game.ts';
+> const suits = { H: 'HEARTS', C: 'CLUBS', D: 'DIAMONDS', S: 'SPADES' };
+> const initials = { HEARTS: 'H', CLUBS: 'C', DIAMONDS: 'D', SPADES: 'S' };
+> const cards = text => text.split(',').filter(Boolean).map(card => ({ suit: suits[card[0]], value: card.slice(1) }));
+> const hand = player => player.cards.map(card => initials[card.suit] + card.value).join(',');
+> const cases = [
+>   ['HA,S10,D9,C7', 'player', 21, 'HA,S10', 16, 'D9,C7'],
+>   ['H10,C6,DA,SK', 'dealer', 16, 'H10,C6', 21, 'DA,SK'],
+>   ['HA,S10,DA,CK', 'dealer', 21, 'HA,S10', 21, 'DA,CK'],
+>   ['H10,C6,D8,S7,HJ', 'dealer', 26, 'H10,C6,HJ', 15, 'D8,S7'],
+>   ['H10,C7,S9,D8,CJ', 'player', 17, 'H10,C7', 27, 'S9,D8,CJ'],
+>   ['H10,C6,D10,S7,H5,C4,D2', 'player', 21, 'H10,C6,H5', 23, 'D10,S7,C4,D2'],
+>   ['H10,C7,S10,D8', 'dealer', 17, 'H10,C7', 18, 'S10,D8'],
+>   ['H10,C8,S10,D6,H2,C2', 'dealer', 18, 'H10,C8', 20, 'S10,D6,H2,C2'],
+>   ['H2,C3,D10,S8,H2,H10', 'dealer', 17, 'H2,C3,H2,H10', 18, 'D10,S8'],
+>   ['HA,CA,DA,SA', 'dealer', 22, 'HA,CA', 22, 'DA,SA'],
+>   ['H10,C6,DA,SA,H2', 'player', 18, 'H10,C6,H2', 22, 'DA,SA'],
+>   ['H10,C6,DA,SA,HA', 'dealer', 27, 'H10,C6,HA', 22, 'DA,SA'],
+> ];
+> for (const [order, winner, playerScore, playerHand, dealerScore, dealerHand] of cases) {
+>   const deck = cards(order);
+>   deck.forEach(Object.freeze);
+>   Object.freeze(deck);
+>   const result = playGame(deck);
+>   assert.deepEqual(result, {
+>     winner,
+>     player: { score: playerScore, cards: cards(playerHand) },
+>     dealer: { score: dealerScore, cards: cards(dealerHand) },
+>   });
+>   assert.deepEqual(playGame(deck), result);
+> }
+> console.log('PASS: All 12 earlier fixtures return the expected winner, scores and hands with frozen inputs.');
+>
+> const source = await readFile('src/game.ts', 'utf8');
+> const output = ts.transpileModule(source + '\nexport { getCardScore, calculateScores, playerTurn, dealerTurn, createResult };\n', {
+>   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2024 },
+> }).outputText;
+> const helpers = await import('data:text/javascript;base64,' + Buffer.from(output).toString('base64'));
+> for (const [rank, score] of [['2', 2], ['3', 3], ['4', 4], ['5', 5], ['6', 6], ['7', 7], ['8', 8], ['9', 9], ['10', 10], ['J', 10], ['Q', 10], ['K', 10], ['A', 11]]) {
+>   assert.equal(helpers.getCardScore(rank), score);
+> }
+> for (const [initial, remaining, score, expectedHand, unused] of [
+>   ['H10,C6', 'H2,CJ', 18, 'H10,C6,H2', 'CJ'],
+>   ['H2,C3', 'H2,H10,S4', 17, 'H2,C3,H2,H10', 'S4'],
+>   ['H10,C6', 'HJ,S4', 26, 'H10,C6,HJ', 'S4'],
+>   ['HA,CA', 'S4', 22, 'HA,CA', 'S4'],
+> ]) {
+>   const player = { cards: cards(initial) };
+>   const deck = cards(remaining);
+>   assert.equal(helpers.playerTurn(deck, player), score);
+>   assert.equal(hand(player), expectedHand);
+>   assert.deepEqual(deck, cards(unused));
+> }
+> for (const [playerScore, initial, remaining, score, expectedHand, unused] of [
+>   [17, 'H10,C8', 'H2', 18, 'H10,C8', 'H2'],
+>   [17, 'S9,D8', 'CJ,HA', 27, 'S9,D8,CJ', 'HA'],
+>   [18, 'S10,D6', 'H2,C2,SA', 20, 'S10,D6,H2,C2', 'SA'],
+>   [21, 'D10,S7', 'C4,D2,H3', 23, 'D10,S7,C4,D2', 'H3'],
+>   [18, 'DA,SA', 'H2', 22, 'DA,SA', 'H2'],
+> ]) {
+>   const dealer = { cards: cards(initial) };
+>   const deck = cards(remaining);
+>   assert.equal(helpers.dealerTurn(deck, dealer, playerScore), score);
+>   assert.equal(hand(dealer), expectedHand);
+>   assert.deepEqual(deck, cards(unused));
+> }
+> for (const [playerScore, dealerScore] of [[undefined, undefined], [26, undefined], [undefined, 15], [26, 15]]) {
+>   const player = { cards: cards('H10,C6,HJ') };
+>   const dealer = { cards: cards('D8,S7') };
+>   const result = helpers.createResult('dealer', player, dealer, playerScore, dealerScore);
+>   assert.equal(result.player.score, 26);
+>   assert.equal(result.dealer.score, 15);
+>   player.cards.length = 0;
+>   dealer.cards.length = 0;
+>   assert.equal(hand(result.player), 'H10,C6,HJ');
+>   assert.equal(hand(result.dealer), 'D8,S7');
+> }
+> console.log('PASS: Changed helpers checked in memory: rank scores, returned turn scores, remaining cards, result defaults and hand-array snapshots.');
+> JS`
+> - Ran `git status --short`
+>
+> </details>
+</details>
+
+No new gameplay defects found. All 12 previously proposed fixtures produce the expected hands, **returned scores**, and lowercase winner roles. Frozen-input and repeat-call checks pass; typecheck and lint also pass.
+
+Keep the previous `playGame()` scenarios. Assert the complete result directly, using fixed expected scores rather than calculating expectations with production helpers.
+
+Adjust the helper tests as follows.
+
+For **`getCardScore(value)`**, move the individual-rank table here:
+
+- Strings 2–10 → their numeric values.
+- J, Q, K → 10 each.
+- A → 11.
+
+For **`calculateScores(cards)`**, keep aggregate tests instead of repeating all 13 ranks:
+
+| Cards | Expected score |
+|---|---:|
+| S7,S10,CJ | 27 |
+| HA,CA | 22 |
+| H10,C6,H5 | 21 |
+
+Use frozen input for these cases to check that scoring does not mutate cards or their order.
+
+For **`playerTurn(deck, player)`**, now assert the returned score alongside the final hand and unused working deck:
+
+| Starting hand | Working deck | Returned score | Final hand | Unused cards |
+|---|---|---:|---|---|
+| H10,C6 | H2,CJ | 18 | H10,C6,H2 | CJ |
+| H2,C3 | H2,H10,S4 | 17 | H2,C3,H2,H10 | S4 |
+| H10,C6 | HJ,S4 | 26 | H10,C6,HJ | S4 |
+| HA,CA | S4 | 22 | HA,CA | S4 |
+
+Also retain the parameterized standing cases: H10 paired with C7/C8/C9/CK gives **17/18/19/20**. Return that score without changing the hand or consuming the working deck.
+
+For **`dealerTurn(deck, dealer, playerScore)`**, replace the Player argument in the earlier proposal with its numeric score:
+
+| Player score | Starting dealer hand | Working deck | Returned score | Final dealer hand | Unused cards |
+|---:|---|---|---:|---|---|
+| 17 | H10,C8 | H2 | 18 | H10,C8 | H2 |
+| 17 | S9,D8 | CJ,HA | 27 | S9,D8,CJ | HA |
+| 18 | S10,D6 | H2,C2,SA | 20 | S10,D6,H2,C2 | SA |
+| 21 | D10,S7 | C4,D2,H3 | 23 | D10,S7,C4,D2 | H3 |
+| 18 | DA,SA | H2 | 22 | DA,SA | H2 |
+
+These cover already ahead, initial tie, multiple draws, a tie reached at three-card 21, and an initially busted Dealer. This helper assumes Player has survived; the `playGame()` bust scenarios verify that Dealer never takes a turn otherwise.
+
+**`createResult()` now merits direct tests**, because it calculates missing scores and copies hand arrays:
+
+- Use Player H10,C6,HJ (**26**), Dealer D8,S7 (**15**), winner **`dealer`**.
+- Parameterize scores omitted, Player score supplied, Dealer score supplied, and both supplied. Supplied values should be correct. Every case must return the same expected result.
+- In one case, change the original Player/Dealer card arrays after creating the result. The returned hands and scores should remain unchanged. This tests your chosen snapshot behavior, rather than a Blackjack rule.
+
+Remove the separate **`isBust()`** proposals because that helper is gone. Its important 21/22 boundaries remain covered by the game fixtures and turn-return tests.
+
+The previous suggestions for `drawCard()`, `initialDraw()`, `isBlackjack()` and `checkBlackjack()` remain applicable. Keep the initial-two-card precondition explicit for the Blackjack helpers; fixture D verifies that later 21 does not trigger natural-Blackjack resolution.
+
+No files changed.
+
+> Sounds good. pls implement these scenarios in `test/game.test.ts`. Ensure readability, do not modify anything else. If any test case fail - don't fix, instead show me the report, it may indicate a real logic issue.
+
+<details><summary>8 previous messages</summary>
+
+> I’ll add the agreed scenarios to `test/game.test.ts` and run the checks. I’ll leave every other file unchanged and report any test failures without fixing the implementation.
+>
+> <details><summary>Explored 3 files, ran a command</summary>
+>
+> <details><summary>Explored 3 files</summary>
+>
+> - Read `./REQUIREMENTS.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+> - Read `./.nvmrc`
+>
+> </details>
+>
+> - Ran `cat test/game.test.ts
+> nl -ba src/game.ts
+> cat src/card.ts
+> cat package.json
+> cat vitest.config.ts
+> cat tsconfig.json
+> git status --short
+> rg --files --hidden -g 'AGENTS.md' -g '!node_modules/**' -g '!\.git/**'`
+>
+> </details>
+>
+> The helpers are still private in src/game.ts, and you asked me to modify only test/game.test.ts. Should I write their tests now so they are ready once you export them, or limit this change to playGame() tests?
+> - Write all tests; I’ll export the helpers
+> - Only implement playGame() tests for now
+>
+> **The helpers are still private in src/game.ts, and you asked me to modify only test/game.test.ts. Should I write their tests now so they are ready once you export them, or limit this change to playGame() tests?**
+>
+> Write the tests and export the helpers, but don't touch anything else in game.ts
+>
+> Understood. I’ll add only the helper export keywords in `game.ts`; all test changes will go in `test/game.test.ts`. I’ll report any failing cases without changing game behavior.
+>
+> <details><summary>Edited a file, ran a command</summary>
+>
+> - Ran `python3 <<'PY'
+> import hashlib
+> import json
+> import subprocess
+> from pathlib import Path
+>
+> paths = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], text=True).splitlines()
+> files = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in paths if Path(name).is_file() and name not in ['src/game.ts', 'test/game.test.ts']}
+> path = Path('src/game.ts')
+> original = path.read_bytes()
+> updated = original
+> helpers = ['initialDraw', 'drawCard', 'getCardScore', 'calculateScores', 'isBlackjack', 'checkBlackjack', 'playerTurn', 'dealerTurn', 'createResult']
+> for name in helpers:
+>     marker = f'\nfunction {name}('.encode()
+>     assert updated.count(marker) == 1, name
+>     updated = updated.replace(marker, f'\nexport function {name}('.encode(), 1)
+> restored = updated
+> for name in helpers:
+>     restored = restored.replace(f'\nexport function {name}('.encode(), f'\nfunction {name}('.encode(), 1)
+> assert restored == original
+> path.write_bytes(updated)
+> print(json.dumps({'other_files': files, 'game_before_hash': hashlib.sha256(original).hexdigest(), 'helpers': helpers}))
+> PY`
+> - Wrote `./test/game.test.ts` (+380 -8)
+>
+> </details>
+>
+> The suite is written, including the full game fixtures and the updated helper cases. In `game.ts`, I added only the nine export keywords. I’m running typecheck, lint, and the tests with coverage now; I won’t alter game behavior if anything fails.
+>
+> <details><summary>Ran 5 commands</summary>
+>
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm --silent run lint`
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> npm --silent run typecheck`
+> - Ran `export PATH="/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH"
+> node_modules/.bin/vitest run test/game.test.ts --coverage --coverage.include=src/game.ts`
+> - Ran `git diff --check -- src/game.ts test/game.test.ts
+> git diff --stat
+> wc -l test/game.test.ts
+> git status --short`
+> - Ran `python3 <<'PY'
+> import hashlib
+> import json
+> import subprocess
+> from pathlib import Path
+>
+> helpers = ['initialDraw', 'drawCard', 'getCardScore', 'calculateScores', 'isBlackjack', 'checkBlackjack', 'playerTurn', 'dealerTurn', 'createResult']
+> source = Path('src/game.ts').read_bytes()
+> for name in helpers:
+>     marker = f'\nexport function {name}('.encode()
+>     assert source.count(marker) == 1, name
+>     source = source.replace(marker, f'\nfunction {name}('.encode(), 1)
+> paths = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], text=True).splitlines()
+> files = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in paths if Path(name).is_file() and name not in ['src/game.ts', 'test/game.test.ts']}
+> print(json.dumps({'other_files': files, 'game_before_hash': hashlib.sha256(source).hexdigest()}))
+> PY`
+>
+> </details>
+</details>
+
+Implemented the suite in [test/game.test.ts](./test/game.test.ts).
+
+- **64 tests passed**, with no failures.
+- **100% coverage** for `game.ts`, including branches.
+- Typecheck and lint passed.
+
+The only source change outside the test file is adding the nine helper export keywords. Game logic and all other source/config files remain unchanged.
+
+> explain me these two `it('can play a valid round after a previous round exhausted its deck', () => {
+>     expect(() => playGame(cards('H8,C8,D8,S8'))).toThrow(/deck exhausted/i);
+>     expect(playGame(cards(threeCard21.deck))).toEqual(expectedResult(threeCard21));
+>   });
+>
+>   it('leaves unused trailing cards out of the result', () => {
+>     const deck = cards(`${threeCard21.deck},H3`);
+>
+>     expect(playGame(deck)).toEqual(expectedResult(threeCard21));
+>   });`
+
+1. **A failed game does not affect the next game**
+
+   `H8,C8,D8,S8` gives both players 16, with no cards remaining. Player needs another card, so the first call must throw a “deck exhausted” error.
+
+   The second call starts a fresh game with a valid deck and must return the expected result. This guards against a failed call leaving shared state that breaks later calls. With your current local-state implementation, it’s mainly a regression safeguard.
+
+2. **Extra cards do not change a finished game**
+
+   Fixture D ends with Player at 21 and Dealer bust at 23. The test appends one extra card, `H3`.
+
+   The complete result must remain identical: same winner, scores and hands. The extra H3 should not enter either hand after the game has finished.
+
+   This checks the observable result; it doesn’t directly monitor whether an internal function reads and discards that card.
