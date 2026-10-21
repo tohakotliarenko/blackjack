@@ -431,7 +431,7 @@ The following is the complete Markdown implementation-plan artifact created duri
 
 # Blackjack — Implementation Plan
 
-> **Source:** See [requirements.md](requirements.md) for the original Unleash assignment. Unleash subsequently confirmed: “The game should be fully autonomous, there's no option to choose whether to hit or stand.” This plan records implementation decisions separately from the original requirements.
+> **Source:** See [requirements.md](docs/REQUIREMENTS.md) for the original Unleash assignment. Unleash subsequently confirmed: “The game should be fully autonomous, there's no option to choose whether to hit or stand.” This plan records implementation decisions separately from the original requirements.
 
 ## Project goal
 
@@ -1282,21 +1282,21 @@ unnecessary complexity.
 The core game concept is sound: the plan correctly preserves fixed-value Aces, sequential dealing, dealer draws on ties, and player-bust precedence. All three reference fixtures are consistent. I would address the following before implementation.
 
 1. **Build must precede integration tests.**
-   [`check` runs tests before building](./IMPLEMENTATION_PLAN.md:116), while [integration tests launch the compiled CLI](./IMPLEMENTATION_PLAN.md:585). A clean checkout therefore needs an explicit build step before integration tests. Ensure standalone `test` and `test:coverage` commands also handle this.
+   [`check` runs tests before building](./docs/IMPLEMENTATION_PLAN.md:116), while [integration tests launch the compiled CLI](./docs/IMPLEMENTATION_PLAN.md:585). A clean checkout therefore needs an explicit build step before integration tests. Ensure standalone `test` and `test:coverage` commands also handle this.
 
 2. **The documented npm command conflicts with exact stdout requirements.**
-   The plan requires [result-only stdout](./IMPLEMENTATION_PLAN.md:475), but documents `npm start`. I verified locally that npm prints script banners to stdout. Document `npm --silent start -- <url>` or direct Node execution for machine-readable output, and test that exact invocation.
+   The plan requires [result-only stdout](./docs/IMPLEMENTATION_PLAN.md:475), but documents `npm start`. I verified locally that npm prints script banners to stdout. Document `npm --silent start -- <url>` or direct Node execution for machine-readable output, and test that exact invocation.
 
 3. **The scoring contract is incomplete.**
-   [`GameResult` contains cards but no scores](./IMPLEMENTATION_PLAN.md:168), while scoring is internal to GameService and the formatter must print scores. Decide explicitly between including finalized scores in the result or exposing a shared pure scoring function. Otherwise, scoring rules may get duplicated.
+   [`GameResult` contains cards but no scores](./docs/IMPLEMENTATION_PLAN.md:168), while scoring is internal to GameService and the formatter must print scores. Decide explicitly between including finalized scores in the result or exposing a shared pure scoring function. Otherwise, scoring rules may get duplicated.
 
 4. **Keep tests within the type-checking scope.**
-   The plan [excludes tests from production compilation](./IMPLEMENTATION_PLAN.md:133), but lists only one TypeScript configuration. Use a checking configuration covering source and tests, plus a build configuration excluding tests.
+   The plan [excludes tests from production compilation](./docs/IMPLEMENTATION_PLAN.md:133), but lists only one TypeScript configuration. Use a checking configuration covering source and tests, plus a build configuration excluding tests.
 
 5. **Document the display-name choice.**
-   [Requirements ask for “your name”](./REQUIREMENTS.md:40), while the plan prints `Player`. The required literal name is ambiguous. Choose it explicitly and keep the display name separate from the domain winner identifier.
+   [Requirements ask for “your name”](./docs/REQUIREMENTS.md:40), while the plan prints `Player`. The required literal name is ambiguous. Choose it explicitly and keep the display name separate from the domain winner identifier.
 
-I would also simplify the service design. A synchronous `playGame(deck: readonly Card[]): GameResult`, with a local cursor and hands, satisfies this application. The [factory, stored state, and single-use flag](./IMPLEMENTATION_PLAN.md:175) introduce lifecycle behavior absent from the assignment. Removing them also removes the artificial G29 test. The existing separation between HTTP, game logic, formatting, and CLI is useful.
+I would also simplify the service design. A synchronous `playGame(deck: readonly Card[]): GameResult`, with a local cursor and hands, satisfies this application. The [factory, stored state, and single-use flag](./docs/IMPLEMENTATION_PLAN.md:175) introduce lifecycle behavior absent from the assignment. Removing them also removes the artificial G29 test. The existing separation between HTTP, game logic, formatting, and CLI is useful.
 
 The test matrices contain **110 entries**, but many are assertions within a scenario rather than distinct scenarios. I would consolidate them as follows:
 
@@ -1374,7 +1374,7 @@ Overall, I’d keep the architecture small, resolve the execution contracts abov
 > </details>
 </details>
 
-I propose eight separate changes to [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md). The original requirements would remain unchanged.
+I propose eight separate changes to [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md). The original requirements would remain unchanged.
 
 1. **Make every full test run build the application first.**
 
@@ -1627,7 +1627,7 @@ No files changed.
 > </details>
 </details>
 
-Updated [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) with all agreed changes, including:
+Updated [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) with all agreed changes, including:
 
 - Lowercase `'player' | 'dealer'` winner roles and `playGame(deck)`.
 - Internal scoring, optional `--name`, and build/typecheck fixes.
@@ -2097,7 +2097,7 @@ Only the plan changed. No implementation added; `git diff --check` passes.
 > </details>
 </details>
 
-Shortened [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) from **803 to 340 lines**.
+Shortened [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) from **803 to 340 lines**.
 
 Removed repeated acceptance criteria, historical test IDs/matrices, duplicate examples and detailed commit suggestions. Consolidated testing into scenario lists and delivery checks into one checklist.
 
@@ -2624,7 +2624,7 @@ Yes—the copy at [game.ts:34](./src/game.ts:34) protects the original deck. `sh
 
 One caveat when exporting helpers: `isBlackjack(score)` assumes an **initial two-card hand**. Keep that precondition explicit; a score alone cannot distinguish natural Blackjack from three-card 21.
 
-The outcomes below come from the [requirements](./REQUIREMENTS.md:16). Exhaustion and input immutability are additional agreed plan contracts. Scores are fixed expected totals, without requiring changes to your current result shape.
+The outcomes below come from the [requirements](./docs/REQUIREMENTS.md:16). Exhaustion and input immutability are additional agreed plan contracts. Scores are fixed expected totals, without requiring changes to your current result shape.
 
 Use one parameterized `playGame()` success table:
 
@@ -3717,3 +3717,144 @@ Verified documented scripts and links against the project. Only the README was a
 </details>
 
 Shortened [README.md](./README.md) to **44 lines**, keeping the introduction, brief rules, prerequisites, quick start and essential development commands. Removed the detailed specification content.
+
+> Good. Now let's move implementation plan md and requirements.md to docs/ folder. Pls update references in readme and anywhere else too.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll move both documents into `docs/`, update references across the project, and check for stale links.
+>
+> <details><summary>Explored a file, 2 searches, a list, ran a command</summary>
+>
+> <details><summary>Explored a search, a list</summary>
+>
+> - Listed files
+> - Searched for `requirements\.md|implementation_plan\.md` in `.`
+>
+> </details>
+>
+> - Ran `git status --short; cat README.md; sed -n '1,110p' IMPLEMENTATION_PLAN.md; sed -n '1,95p' AI_CONVERSATION.md`
+>
+> <details><summary>Explored 5 files, a search</summary>
+>
+> - Searched for `\]\([^)]*\)|^\[[^]]+\]:` in `README.md`
+> - Read `./AI_CONVERSATION.md`
+> - Read `./AI_CONVERSATION.md`
+> - Read `./AI_CONVERSATION.md`
+> - Read `./AI_CONVERSATION.md`
+> - Read `./AI_CONVERSATION.md`
+>
+> </details>
+>
+> </details>
+>
+> The conversation archive also has clickable links to both files. I’ll update those links while preserving the quoted commands and historical filenames.
+>
+> <details><summary>Ran 5 commands</summary>
+>
+> - Ran ``python3 - <<'PY'
+> from pathlib import Path
+> import re
+> text = Path('AI_CONVERSATION.md').read_text()
+> pattern = re.compile(r'`+|\]\((?P<target>(?:\./)?(?:requirements|implementation_plan)\.md(?::\d+|#[^)]*)?)\)', re.I)
+> delimiter = None
+> edits = []
+> for match in pattern.finditer(text):
+>     target = match.group('target')
+>     if target is None:
+>         if delimiter is None:
+>             delimiter = len(match.group())
+>         elif len(match.group()) == delimiter:
+>             delimiter = None
+>     elif delimiter is None:
+>         edits.append((text.count('\n', 0, match.start()) + 1, target))
+> print('Archive links to update:', len(edits))
+> for line, target in edits:
+>     print(f'{line}: {target}')
+> PY``
+> - Ran ``python3 - <<'PY'
+> from pathlib import Path
+> import hashlib, json, re
+>
+> excluded = {'.git', 'node_modules', 'dist', 'coverage', '.codex', '.agents'}
+> def snapshot():
+>     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('.').rglob('*') if not any(part in excluded for part in p.parts) and p.is_file()}
+>
+> baseline = snapshot()
+> Path('/private/tmp/blackjack-docs-move-baseline.json').write_text(json.dumps(baseline))
+>
+> folder = Path('docs')
+> folder.mkdir(exist_ok=True)
+> for name in ['REQUIREMENTS.md', 'IMPLEMENTATION_PLAN.md']:
+>     target = folder / name
+>     assert not target.exists(), f'Destination already exists: {target}'
+>     Path(name).rename(target)
+>     assert hashlib.sha256(target.read_bytes()).hexdigest() == baseline[name]
+>
+> readme = Path('README.md')
+> content = readme.read_bytes()
+> assert content.count(b'](REQUIREMENTS.md)') == 1
+> readme.write_bytes(content.replace(b'](REQUIREMENTS.md)', b'](docs/REQUIREMENTS.md)'))
+>
+> archive = Path('AI_CONVERSATION.md')
+> content = archive.read_bytes().decode('utf-8')
+> pattern = re.compile(r'`+|\]\((?P<target>(?:\./)?(?:requirements|implementation_plan)\.md(?::\d+|#[^)]*)?)\)', re.I)
+> delimiter = None
+> edits = []
+> for match in pattern.finditer(content):
+>     target = match.group('target')
+>     if target is None:
+>         if delimiter is None:
+>             delimiter = len(match.group())
+>         elif len(match.group()) == delimiter:
+>             delimiter = None
+>     elif delimiter is None:
+>         parts = re.fullmatch(r'(\./)?(requirements|implementation_plan)\.md(.*)', target, re.I)
+>         prefix, name, suffix = parts.groups()
+>         updated = f'{prefix or ""}docs/{name.upper()}.md{suffix}'
+>         edits.append((match.start('target'), match.end('target'), updated))
+> for start, end, updated in reversed(edits):
+>     content = content[:start] + updated + content[end:]
+> archive.write_bytes(content.encode('utf-8'))
+> print(f'Moved both documents without changing their contents; updated README and {len(edits)} archive links.')
+>
+> current = snapshot()
+> changes = sorted(p for p in baseline.keys() | current.keys() if baseline.get(p) != current.get(p))
+> print('Changed paths:', ', '.join(changes))
+> assert changes == ['AI_CONVERSATION.md', 'IMPLEMENTATION_PLAN.md', 'README.md', 'REQUIREMENTS.md', 'docs/IMPLEMENTATION_PLAN.md', 'docs/REQUIREMENTS.md']
+> PY``
+> - Ran `git diff --check`
+> - Ran `git diff --stat; git diff -- README.md AI_CONVERSATION.md; git status --short`
+> - Ran ``python3 - <<'PY'
+> from pathlib import Path
+> import re
+>
+> pattern = re.compile(r'`+|\]\((?P<target>(?:\./)?(?:docs/)?(?:requirements|implementation_plan)\.md(?::\d+|#[^)]*)?)\)', re.I)
+> checked = 0
+> for path in [Path('README.md'), Path('AI_CONVERSATION.md'), *Path('docs').glob('*.md')]:
+>     text = path.read_bytes().decode('utf-8')
+>     delimiter = None
+>     for match in pattern.finditer(text):
+>         target = match.group('target')
+>         if target is None:
+>             if delimiter is None:
+>                 delimiter = len(match.group())
+>             elif len(match.group()) == delimiter:
+>                 delimiter = None
+>         elif delimiter is None:
+>             target_path = re.split(r':\d+$|#', target)[0]
+>             resolved = path.parent / target_path
+>             assert resolved.is_file(), f'Broken link in {path}: {target}'
+>             assert resolved.resolve().parent == Path('docs').resolve(), f'Stale document link: {target}'
+>             checked += 1
+> print(f'All {checked} active links to the moved documents resolve under docs/.')
+> assert not Path('REQUIREMENTS.md').exists()
+> assert not Path('IMPLEMENTATION_PLAN.md').exists()
+> PY``
+>
+> </details>
+</details>
+
+Moved [REQUIREMENTS.md](./docs/REQUIREMENTS.md) and [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) into `docs/`.
+
+Updated README and conversation archive links. Verified all active references resolve; both documents’ contents are unchanged.

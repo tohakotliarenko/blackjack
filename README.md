@@ -42,5 +42,5 @@ npm run test:coverage             # Run tests with coverage
 `src/` contains the CLI, deck provider, game logic and formatter. `test/` contains
 Vitest unit tests and integration tests using a local HTTP server.
 
-See [REQUIREMENTS.md](REQUIREMENTS.md) for the original task and
+See [REQUIREMENTS.md](docs/REQUIREMENTS.md) for the original task, [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) and
 [AI_CONVERSATION.md](AI_CONVERSATION.md) for the AI conversation history.
