@@ -2987,3 +2987,143 @@ The only source change outside the test file is adding the nine helper export ke
    The complete result must remain identical: same winner, scores and hands. The extra H3 should not enter either hand after the game has finished.
 
    This checks the observable result; it doesn’t directly monitor whether an internal function reads and discards that card.
+
+> Look at my formatter.js, I need you to check my implementation against requirements.md and implementation plan. Any issues?
+>
+> Propose test cases in english just for formatGameResult, the other helper can be fully tested through this function. Don't introduce any code changes
+
+<details><summary>3 previous messages</summary>
+
+> Context compaction
+>
+> Source: automatic
+> Status: completed
+>
+> I’ll check the formatter against the requirements and plan, then propose a compact set of tests for `formatGameResult`. I won’t change any files.
+>
+> <details><summary>Explored 3 files, ran 7 commands</summary>
+>
+> - Ran `pwd; rg --files -g 'AGENTS.md' -g 'REQUIREMENTS.md' -g 'IMPLEMENTATION_PLAN.md' -g '*formatter*' -g 'game.ts' -g 'card.ts' -g 'package.json' -g 'tsconfig.json'`
+>
+> - Ran `for file in /AGENTS.md /Users/AGENTS.md /Users/antonkotliarenko/AGENTS.md /Users/antonkotliarenko/Projects/AGENTS.md; do if test -f "$file"; then printf '\n%s\n' "$file"; cat "$file"; fi; done`
+>
+> <details><summary>Explored 3 files</summary>
+>
+> - Read `./REQUIREMENTS.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+> - Read `./src/formatter.ts`
+>
+> </details>
+>
+> - Ran `cat src/game.ts src/card.ts package.json tsconfig.json`
+>
+> - Ran `git status --short; rg --files --hidden -g AGENTS.md -g '!node_modules' -g '!.git'`
+>
+> - Ran ``/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin/node --input-type=module <<'NODE'
+> import assert from 'node:assert/strict';
+> import { formatGameResult } from './src/formatter.ts';
+> const suits = { H: 'HEARTS', S: 'SPADES', C: 'CLUBS', D: 'DIAMONDS' };
+> const hand = (score, codes) => Object.freeze({ score, cards: Object.freeze(codes.split(',').map(code => Object.freeze({ suit: suits[code[0]], value: code.slice(1) }))) });
+> const result = Object.freeze({ winner: 'player', dealer: hand(27, 'S7,S10,CJ'), player: hand(19, 'D2,H2,C6,H9') });
+> const original = JSON.stringify(result);
+> assert.equal(formatGameResult(result), 'Winner: Player\nDealer | 27 | S7,S10,CJ\nPlayer | 19 | D2,H2,C6,H9');
+> for (const name of ['Ivar', 'Zoë 王', 'Dealer']) {
+>   assert.equal(formatGameResult(result, name), `Winner: ${name}\nDealer | 27 | S7,S10,CJ\n${name} | 19 | D2,H2,C6,H9`);
+> }
+> const dealerWins = Object.freeze({ winner: 'dealer', dealer: hand(21, 'DA,CK'), player: hand(21, 'HA,S10') });
+> assert.equal(formatGameResult(dealerWins, 'Zoë 王'), 'Winner: Dealer\nDealer | 21 | DA,CK\nZoë 王 | 21 | HA,S10');
+> assert.equal(formatGameResult({ ...result, player: hand(123, 'H2') }).split('\n')[2], 'Player | 123 | H2');
+> assert.equal(formatGameResult(result), formatGameResult(result));
+> assert.equal(JSON.stringify(result), original);
+> console.log('Formatter spot checks passed: exact output, both roles, names, supplied scores, repeatability, frozen input.');
+> NODE``
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH node_modules/.bin/eslint src/formatter.ts`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run typecheck`
+>
+> </details>
+</details>
+
+I found no issues in [src/formatter.ts](./src/formatter.ts). It satisfies the requirements and plan:
+
+- Maps winner roles to display names correctly.
+- Prints Dealer before Player, regardless of the winner.
+- Preserves card order and rank strings; taking the first suit character works for all four supported suits.
+- Prints supplied scores without recalculating.
+- Uses the required separators and exactly three lines, without a trailing newline.
+- Does not mutate its input.
+
+The implementation is appropriately simple. Name validation belongs to the CLI, so the formatter needs no additional validation. Typechecking, formatter linting and direct output checks passed. No files changed.
+
+For `formatGameResult`, I suggest these compact scenarios:
+
+1. **Parameterized exact-output cases using the default name.**
+
+   Compare the complete returned string against a literal expected string for each row:
+
+   | Scenario | Expected winner line | Dealer score and cards | Player score and cards |
+   |---|---|---|---|
+   | Dealer bust | `Winner: Player` | `27` — `S7,S10,CJ` | `19` — `D2,H2,C6,H9` |
+   | Player bust | `Winner: Dealer` | `15` — `D8,S7` | `26` — `H10,C6,HQ` |
+   | Both natural Blackjack | `Winner: Dealer` | `21` — `DA,CK` | `21` — `HA,S10` |
+   | Longer hands | `Winner: Player` | `22` — `H5,C6,DA` | `17` — `H2,C3,D4,S8` |
+
+   Together these cover all four suits, every rank, both winners, bust scores and ordered hands with multiple cards. Full-string comparisons also cover spacing, commas, line order and absence of a trailing newline.
+
+   For the both-natural case, supply `winner: 'dealer'`; the formatter should simply print that result.
+
+2. **Parameterized custom-name cases for both winner roles.**
+
+   Use `Zoë 王`, covering internal spaces and Unicode:
+   - Player wins: the name appears in the winner line and Player’s hand line.
+   - Dealer wins: the winner remains `Dealer`; the custom name appears only in Player’s hand line.
+
+3. **Print supplied scores rather than calculating them.**
+
+   Keep the cards unchanged but deliberately supply different score fields—for example, `28` for Dealer and `20` for Player in the first fixture. Expect those exact numbers in the output. This verifies the agreed responsibility boundary.
+
+4. **Repeatability and unchanged input.**
+
+   Format the same result twice and expect identical strings. Use frozen result objects, hands and card objects, and verify their values remain unchanged. The frozen-input check can also be shared across the cases above.
+
+All card-formatting behavior is covered through `formatGameResult`; separate tests for `formatCards` would add little value.
+
+> Yes, correct. Implement these test cases under test/formatter.test.ts. Focus on readability, be concise.
+
+<details><summary>2 previous messages</summary>
+
+> I’ll add the agreed cases in `test/formatter.test.ts`, then run the formatter tests, typecheck and lint.
+>
+> <details><summary>Created a file, explored a file, ran 6 commands</summary>
+>
+> - Ran `cat src/formatter.ts src/card.ts`
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./test/game.test.ts`
+>
+> </details>
+>
+> - Ran `cat package.json vitest.config.ts; git status --short; rg --files --hidden -g AGENTS.md -g '!node_modules' -g '!.git'`
+>
+> - Wrote `./test/formatter.test.ts` (+115 -0)
+>
+> - Ran `git status --short`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH node_modules/.bin/vitest run test/formatter.test.ts --coverage --coverage.include=src/formatter.ts`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run typecheck`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run lint`
+>
+> </details>
+</details>
+
+Added [test/formatter.test.ts](./test/formatter.test.ts) with all agreed scenarios.
+
+- All 8 tests pass.
+- Formatter coverage is 100%.
+- Typecheck and lint pass.
+
+No other files changed.
