@@ -206,7 +206,8 @@ describe('fetchDeck', () => {
     { name: 'null rank', data: [{ ...card, value: null }] },
     { name: 'invalid later card', data: [card, { ...card, value: '1' }] },
   ])('rejects a deck with $name', async ({ data }) => {
-    fetchMock.mockResolvedValue(Response.json(data));
+    const payload = Array.isArray(data) ? [...data, ...deck.slice(0, 3)] : data;
+    fetchMock.mockResolvedValue(Response.json(payload));
 
     await expect(fetchDeck(customUrl)).rejects.toThrow(
       'Deck response must be an array of valid cards.',

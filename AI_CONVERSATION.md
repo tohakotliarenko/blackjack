@@ -3858,3 +3858,188 @@ Shortened [README.md](./README.md) to **44 lines**, keeping the introduction, br
 Moved [REQUIREMENTS.md](./docs/REQUIREMENTS.md) and [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) into `docs/`.
 
 Updated README and conversation archive links. Verified all active references resolve; both documents’ contents are unchanged.
+
+> analyze the app one again, check if it matches original requirements and the implementation plan, check test coverage if it's meaningful and not redundant and general impression.
+
+<details><summary>6 previous messages</summary>
+
+> I’ll review the app against the original requirements and current plan, then assess the tests for meaningful coverage, gaps and redundancy. I won’t change any files.
+>
+> <details><summary>Explored 14 files, a list, ran 3 commands</summary>
+>
+> - Ran `git status --short`
+>
+> <details><summary>Explored a list</summary>
+>
+> - Listed files
+>
+> </details>
+>
+> - Ran `cat docs/REQUIREMENTS.md docs/IMPLEMENTATION_PLAN.md`
+>
+> - Ran `cat package.json tsconfig.json tsconfig.build.json eslint.config.mjs vitest.config.ts .prettierrc.json .prettierignore .gitignore .nvmrc README.md`
+>
+> <details><summary>Explored 14 files</summary>
+>
+> - Read `./test/game.test.ts`
+> - Read `./test/deck.test.ts`
+> - Read `./test/formatter.test.ts`
+> - Read `./test/cli.test.ts`
+> - Read `./test/integration.test.ts`
+> - Read `./src/cli.ts`
+> - Read `./src/deck.ts`
+> - Read `./src/game.ts`
+> - Read `./src/card.ts`
+> - Read `./src/formatter.ts`
+> - Read `./AI_CONVERSATION.md`
+> - Read `./docs/IMPLEMENTATION_PLAN.md`
+> - Read `./package.json`
+> - Read `./.prettierignore`
+>
+> </details>
+>
+> </details>
+>
+> The gameplay and module boundaries look consistent with the requirements, including bust precedence and dealer draws on ties. The plan still contains some superseded decisions. I’m running the checks and reviewing whether any tests assert more implementation detail than necessary.
+>
+> <details><summary>Explored 4 files, a search, ran 6 commands</summary>
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run test:coverage`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run typecheck`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run lint`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run format:check`
+>
+> <details><summary>Explored 4 files, a search</summary>
+>
+> - Read `./test/deck.test.ts`
+> - Read `./test/game.test.ts`
+> - Read `./test/formatter.test.ts`
+> - Read `./test/integration.test.ts`
+> - Searched for `"engines"|"node"|"name"` in `package.json`
+>
+> </details>
+>
+> - Ran `git log -6 --oneline; git remote -v; git status --short`
+>
+> - Ran `python3 - <<'PY'
+> from pathlib import Path
+> import json
+> package = json.loads(Path('package.json').read_text())
+> lock = json.loads(Path('package-lock.json').read_text())['packages']['']
+> assert package['devDependencies'] == lock['devDependencies']
+> assert package['engines'] == lock['engines']
+> print('Manifest and lockfile dependency/engine declarations match.')
+> coverage = json.loads(Path('coverage/coverage-final.json').read_text())
+> for path, data in coverage.items():
+>     missing = [(key, hits) for key, hits in data['b'].items() if 0 in hits]
+>     print(Path(path).name, 'uncovered branches:', [{'line': data['branchMap'][key]['line'], 'hits': hits} for key, hits in missing])
+> PY`
+>
+> </details>
+>
+> All 151 tests pass, as do typecheck, lint and formatting. Overall coverage is 98.9% of lines and 95% of branches; game and formatter coverage are both 100%. I’m checking one overlapping helper-test group to distinguish useful repetition from removable duplication.
+>
+> <details><summary>Ran 2 commands</summary>
+>
+> - Ran `rg -n 'Formatter API|validated name|internal to the game|stalled endpoint|Keep named|empty array|Accept duplicate' docs/IMPLEMENTATION_PLAN.md; git status --short`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH node_modules/.bin/vitest run test/game.test.ts -t '^(?!.*checkBlackjack)' --coverage --coverage.include=src/game.ts --coverage.reportsDirectory=/private/tmp/blackjack-review-game-coverage`
+>
+> </details>
+</details>
+
+The functional behavior matches the original requirements and our agreed changes. I found no gameplay or CLI defects. The architecture fits the feature well: a small orchestration layer, separate fetching/game/formatting modules, native APIs and no production dependencies.
+
+Two documentation items remain:
+
+1. **The AI history needs attention before submission.** [AI_CONVERSATION.md:8](./AI_CONVERSATION.md:8) describes itself as a reconstruction containing condensed replies. The assignment requests the full conversation history. Its opening description of AI involvement also needs to reflect the later implementation work.
+
+2. **The implementation plan contains superseded decisions.** [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md:126) should record the four-card minimum in the provider, the formatter-owned default name, exported game helpers, and the agreed integration scope of fixtures A–D without a real timeout test. These are documentation updates to capture decisions already made.
+
+All **151 tests pass**, along with build, typecheck, ESLint and Prettier checks. Coverage is:
+
+| Scope | Lines | Branches |
+|---|---:|---:|
+| Game and formatter | 100% | 100% |
+| Overall | 98.9% | 95% |
+
+The coverage is meaningful: tests assert literal expected scores and cards, frozen-input preservation, bust precedence, natural versus later 21, dealer ties, exhaustion, and exact output. Integration tests exercise real HTTP, compiled JavaScript, actual exit codes and npm invocation.
+
+The uncovered branches are defensive handling of non-`Error` exceptions. The CLI entry-point line is exercised by subprocess integration tests, but its execution is outside the collected parent-process coverage. I wouldn’t add artificial tests merely to increase those percentages.
+
+There are two worthwhile test cleanups:
+
+- **Optional redundancy reduction:** the four [checkBlackjack tests](./test/game.test.ts:256) repeat scenarios already covered through `playGame()`. I reran the game suite excluding that group: the remaining **56 tests passed with 100% game coverage**, and those scenarios remained covered.
+- **Reduce coupling to validation order:** most [invalid-card fixtures](./test/deck.test.ts:190) contain fewer than four cards. Pad those fixtures with valid cards so they isolate card validation independently of the minimum-length check.
+
+I would retain the helper tests that check unused cards, the separate request/body timeout cases, and the A–D integration fixtures. They verify distinct behavior despite some overlap. The full suite took approximately **1.3 seconds here**, so there is little practical pressure to trim it aggressively.
+
+No files changed.
+
+> I've fixed the first one, and good point for the second one. Can you propose a fix? Don't implement yet
+
+<details><summary>2 previous messages</summary>
+
+> I’ll check the current fixtures and propose a small adjustment to isolate card validation from the four-card minimum. I won’t edit anything.
+>
+> <details><summary>Explored a file, a search</summary>
+>
+> - Read `./test/deck.test.ts`
+> - Searched for `describe\('checkBlackjack'|checkBlackjack` in `game.test.ts`
+>
+> </details>
+</details>
+
+Keep the existing table and append three valid cards to each array fixture in the callback:
+
+```ts
+const payload = Array.isArray(data)
+  ? [...data, ...deck.slice(0, 3)]
+  : data;
+
+fetchMock.mockResolvedValue(Response.json(payload));
+```
+
+Every current array fixture contains at least one entry, so this guarantees at least four entries while preserving the invalid data and its position.
+
+Non-array root fixtures remain as supplied. The separate 0–3 card tests continue covering minimum length, and the existing error expectation stays the same.
+
+No additional helper or production changes are needed. No files changed.
+
+> Sounds good, implement the fix and check the tests are passing
+
+<details><summary>2 previous messages</summary>
+
+> I’ll add the padding to the invalid-card fixtures, then run the deck tests, typecheck and lint.
+>
+> <details><summary>Edited a file, explored a file, ran 6 commands</summary>
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./test/deck.test.ts`
+>
+> </details>
+>
+> - Ran `git status --short; cat package.json`
+>
+> - Wrote `./test/deck.test.ts` (+2 -1)
+>
+> - Ran `git diff --check; git diff -- test/deck.test.ts`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH node_modules/.bin/vitest run test/deck.test.ts`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run typecheck`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run format:check`
+>
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run lint`
+>
+> </details>
+</details>
+
+Updated [test/deck.test.ts](./test/deck.test.ts) to pad invalid-card arrays with three valid cards.
+
+All **45 deck tests pass**, plus typecheck, lint and formatting checks. No other files changed.
+

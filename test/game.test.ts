@@ -254,12 +254,7 @@ describe('isBlackjack', () => {
 });
 
 describe('checkBlackjack', () => {
-  it.each(naturalCases)('$name', scenario => {
-    const player = { cards: cards(scenario.player.cards) };
-    const dealer = { cards: cards(scenario.dealer.cards) };
-
-    expect(checkBlackjack(player, dealer)).toEqual(expectedResult(scenario));
-  });
+  // Natural Blackjack outcomes are covered by playGame tests via naturalCases.
 
   it('leaves the round unresolved when neither initial hand has Blackjack', () => {
     const player = { cards: cards('H10,C7') };
