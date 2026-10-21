@@ -3127,3 +3127,238 @@ Added [test/formatter.test.ts](./test/formatter.test.ts) with all agreed scenari
 - Typecheck and lint pass.
 
 No other files changed.
+
+> analyze the requirements.md and the implementation plan for the deck provider. I need you to come up with an implementation plan for this feature.
+> Use native node.fetch, no extra deps. Use Use `https://sandbox.getunleash.io/blackjack/shuffle` as the default argument value for the deck url, a custom one may be passed by cli.ts. Handle network errors, invalid json.
+> Validate deck json to contain only cards of types specified in card.ts. 52 cards or unique cards isn't a requirement. Keep it simple, readable, and don't overengineer. Aim to introduce less lines of code.
+> Plan the feature and print the proposal
+
+<details><summary>2 previous messages</summary>
+
+> I’ll read the deck requirements, implementation plan and current types, then propose a minimal implementation using native `fetch`. I won’t change any files.
+>
+> <details><summary>Explored 2 files, a list, ran a command</summary>
+>
+> <details><summary>Explored 2 files</summary>
+>
+> - Read `./REQUIREMENTS.md`
+> - Read `./IMPLEMENTATION_PLAN.md`
+>
+> </details>
+>
+> - Ran `cat src/card.ts src/deck.ts src/cli.ts package.json tsconfig.json`
+>
+> <details><summary>Explored a list</summary>
+>
+> - Listed files
+>
+> </details>
+>
+> </details>
+</details>
+
+I’d keep this to one exported function and one private validation helper in `src/deck.ts`.
+
+1. **Define the API and shared card values.**
+
+   ```ts
+   fetchDeck(
+     url = 'https://sandbox.getunleash.io/blackjack/shuffle'
+   ): Promise<Card[]>
+   ```
+
+   `cli.ts` can pass a custom URL or `undefined` to use the default.
+
+   Add `CARD_SUITS` alongside `CARD_VALUES` in `card.ts`, and derive the existing suit type from it. This lets runtime validation and TypeScript use the same allowed values without duplicating the list.
+
+2. **Validate the URL before fetching.**
+
+   Parse it with `new URL(url)` and require `http:` or `https:`. Malformed URLs, relative paths and unsupported protocols fail before networking. An empty custom URL is invalid.
+
+3. **Fetch and parse the response.**
+
+   - Use native `fetch` with GET and `AbortSignal.timeout(10_000)`.
+   - Keep that signal attached while awaiting `response.json()`, so the timeout covers both the request and body reading.
+   - Check `response.ok` before parsing. For failure, throw an error containing the HTTP status.
+   - Treat the parsed JSON as `unknown` until validated.
+   - Make one fetch call, with no retries or fallback to the default endpoint.
+
+4. **Validate the complete deck.**
+
+   A private `isCard(value: unknown): value is Card` helper checks that each entry is a non-null object whose:
+   - `suit` exactly matches a value in `CARD_SUITS`.
+   - `value` exactly matches a string in `CARD_VALUES`.
+
+   Require an array and validate every entry before returning it. Reject the whole response if any card is invalid.
+
+   Accept empty arrays, short decks, duplicates and additional object fields. Preserve card order and values; numeric `5` must be rejected rather than converted to `"5"`.
+
+5. **Keep error handling small.**
+
+   Use ordinary `Error` objects with short, useful messages for HTTP failures, malformed JSON and invalid deck data. Give network failures deck-loading context and preserve their original cause.
+
+   A timeout or disconnected response body must remain a transport error, rather than being mislabeled as invalid JSON. Let errors propagate to `cli.ts`, which owns printing and exit codes.
+
+6. **Add compact tests in `test/deck.test.ts`.**
+
+   Use parameterized cases and mock native `fetch`; avoid the live endpoint.
+
+   - Default URL, explicit `undefined`, custom HTTP/HTTPS URLs; one GET and preserved order.
+   - Accept all suits/ranks, empty and short decks, duplicates and extra fields.
+   - Reject malformed/unsupported URLs before fetching.
+   - HTTP `404`, `429`, `500`, `503`.
+   - DNS failure, refused connection and disconnection, including body-read failure.
+   - Separate timeout tests before headers and during body reading.
+   - Malformed JSON.
+   - Invalid roots and entries: object/null root, null or primitive card, missing fields, invalid/lowercase suits, unsupported ranks and numeric values.
+   - Failed custom requests never retry or fetch the default URL.
+
+Then run the deck tests, typecheck, lint and build. This should fit in roughly **40–60 production lines**, with only a small supporting change in `card.ts`. No dependencies or CLI implementation are needed for this step.
+
+> Yes, looks good. Go ahead and implement these changes, don't touch anything else. Verify with tests.
+
+<details><summary>6 previous messages</summary>
+
+> I’ll implement `fetchDeck`, add the shared suit list in `card.ts`, and write the deck tests. Then I’ll run the checks without changing the CLI or other files.
+>
+> <details><summary>Explored 2 lists, ran 2 commands</summary>
+>
+> - Ran `cat src/card.ts src/deck.ts package.json vitest.config.ts eslint.config.mjs tsconfig.json`
+>
+> - Ran `git status --short`
+>
+> <details><summary>Explored 2 lists</summary>
+>
+> - Listed files
+> - Listed files in `test`
+>
+> </details>
+>
+> </details>
+>
+> `deck.ts` is empty, and `card.ts` already provides the rank list. I’ll add the suit list alongside it. I’ll also test timeouts during body reading separately, so they aren’t reported as invalid JSON.
+>
+> <details><summary>Created a file, edited 2 files, ran 4 commands</summary>
+>
+> - Ran `python3 - <<'PY'
+> from pathlib import Path
+> import hashlib, json
+> excluded = {'.git', 'node_modules', 'dist', 'coverage', '.codex', '.agents'}
+> files = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('.').rglob('*') if not any(part in excluded for part in p.parts) and p.is_file()}
+> Path('/private/tmp/blackjack-deck-baseline.json').write_text(json.dumps(files))
+> print(f'Saved baseline for {len(files)} project files.')
+> PY`
+> - Wrote `./src/card.ts` (+3 -1)
+> - Wrote `./src/deck.ts` (+40 -0)
+> - Wrote `./test/deck.test.ts` (+173 -0)
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run test:coverage`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run typecheck`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run lint`
+>
+> </details>
+>
+> The implementation passes all 114 tests, including 42 deck-provider cases. Build, typecheck and lint also pass. Deck code has full line coverage; I’m checking that only the three intended files changed.
+>
+> <details><summary>Ran 4 commands</summary>
+>
+> - Ran `git diff --check`
+> - Ran `git diff -- src/card.ts`
+> - Ran `git status --short`
+> - Ran `python3 - <<'PY'
+> from pathlib import Path
+> import hashlib, json
+> baseline = json.loads(Path('/private/tmp/blackjack-deck-baseline.json').read_text())
+> excluded = {'.git', 'node_modules', 'dist', 'coverage', '.codex', '.agents'}
+> current = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('.').rglob('*') if not any(part in excluded for part in p.parts) and p.is_file()}
+> changes = sorted(p for p in baseline.keys() | current.keys() if baseline.get(p) != current.get(p))
+> print('Changed files:', ', '.join(changes))
+> assert changes == ['src/card.ts', 'src/deck.ts', 'test/deck.test.ts']
+> print('Deck implementation:', len(Path('src/deck.ts').read_text().splitlines()), 'lines')
+> PY`
+>
+> </details>
+</details>
+
+Implemented only the three agreed files:
+
+- [deck.ts](./src/deck.ts): native fetch, default/custom URLs, validation, 10-second timeout and error handling.
+- [card.ts](./src/card.ts): shared suit constants.
+- [deck.test.ts](./test/deck.test.ts): 42 deck-provider tests.
+
+All **114 tests pass**. Build, typecheck and lint pass. Deck code has 100% line coverage.
+
+No dependencies added or commits made.
+
+> Good, I've added a better error message for url parsing - check deck.ts:17. Adjust test expectations accordingly.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll check the new URL error message, update the matching test expectations, and run the deck tests.
+>
+> <details><summary>Explored 2 files, ran a command</summary>
+>
+> <details><summary>Explored 2 files</summary>
+>
+> - Read `./src/deck.ts`
+> - Read `./test/deck.test.ts`
+>
+> </details>
+>
+> - Ran `git status --short`
+>
+> </details>
+>
+> The new message applies to malformed URLs; unsupported protocols still use the HTTP/HTTPS error. I also noticed you removed the explicit GET option, so I’ll adjust that assertion to accept fetch’s default GET.
+>
+> <details><summary>Edited a file, ran 3 commands</summary>
+>
+> - Wrote `./test/deck.test.ts` (+14 -6)
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH node_modules/.bin/vitest run test/deck.test.ts`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run typecheck`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH node_modules/.bin/eslint test/deck.test.ts`
+>
+> </details>
+</details>
+
+Updated only [test/deck.test.ts](./test/deck.test.ts) to check the URL-specific error messages and accept fetch’s default GET.
+
+All 42 deck tests, typecheck and lint pass.
+
+> I've moved deck validation (if (deck.length < MIN_GAME_CARDS) {) from game.ts to deck.ts. Make sure the corresponding tests are moved to deck.test.ts as well.
+
+<details><summary>4 previous messages</summary>
+
+> I’ll check where the validation now lives, move the corresponding tests to `deck.test.ts`, and run the checks.
+>
+> <details><summary>Explored 2 files, ran 2 commands</summary>
+>
+> - Ran `cat src/game.ts src/deck.ts`
+>
+> <details><summary>Explored 2 files</summary>
+>
+> - Read `./test/deck.test.ts`
+> - Read `./test/game.test.ts`
+>
+> </details>
+>
+> - Ran `git status --short; rg -n 'MIN_GAME_CARDS|initial deck|not enough cards|short deck|empty deck|fetchDeck\(' test src`
+>
+> </details>
+>
+> I’ll move the 0–3 card rejection cases to the provider tests. I’ll also update the success fixtures to contain at least four cards, preserving coverage for small decks, duplicates and extra fields. Gameplay exhaustion tests will stay in `game.test.ts`.
+>
+> <details><summary>Edited 2 files, ran 2 commands</summary>
+>
+> - Wrote `./test/deck.test.ts` (+14 -4)
+> - Wrote `./test/game.test.ts` (+0 -10)
+> - Ran `git diff --check`
+> - Ran `PATH=/Users/antonkotliarenko/.nvm/versions/node/v24.21.0/bin:$PATH npm --silent run check`
+>
+> </details>
+</details>
+
+Moved the 0–3 card rejection cases from `game.test.ts` to `deck.test.ts`. Updated success fixtures to use at least four cards, preserving duplicate and extra-field coverage.
+
+`npm run check` passes: **113 tests**, typecheck, lint and build.
+
+Only the two test files changed.

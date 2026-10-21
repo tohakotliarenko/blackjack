@@ -4,7 +4,9 @@ export const CARD_VALUES = [
 
 export type CardValue = typeof CARD_VALUES[number];
 
+export const CARD_SUITS = ['SPADES', 'HEARTS', 'DIAMONDS', 'CLUBS'] as const;
+
 export interface Card {
-    readonly suit: "SPADES" | "HEARTS" | "DIAMONDS" | "CLUBS";
+    readonly suit: typeof CARD_SUITS[number];
     readonly value: CardValue;
 }

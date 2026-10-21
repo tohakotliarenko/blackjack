@@ -15,7 +15,6 @@ export interface GameResult {
     readonly dealer: PlayerResult;
 }
 
-const MIN_GAME_CARDS = 4;
 const MIN_PLAYER_SCORE = 17;
 const MAX_PLAYER_SCORE = 21;
 
@@ -27,10 +26,6 @@ const CARD_SCORE_MAP: Partial<Record<CardValue, number>> = {
 };
 
 export function playGame(deck: readonly Card[]) {
-    if (deck.length < MIN_GAME_CARDS) {
-        throw new Error("Not enough cards in the deck to start the game.");
-    }
-
     const remainingDeck = [...deck];
     const { player, dealer } = initialDraw(remainingDeck);
 

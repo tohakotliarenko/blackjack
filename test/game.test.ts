@@ -151,16 +151,6 @@ describe('playGame', () => {
     expect(deck).toEqual(cards(scenario.deck));
   });
 
-  it.each([0, 1, 2, 3])('rejects an initial deck of %i cards', length => {
-    // Even HA,S10 requires Dealer to receive two cards before checking naturals.
-    const deck = cards('HA,S10,D9').slice(0, length);
-    const original = [...deck];
-    Object.freeze(deck);
-
-    expect(() => playGame(deck)).toThrow(/not enough cards/i);
-    expect(deck).toEqual(original);
-  });
-
   it.each([
     { turn: 'player', deck: 'H8,C8,D8,S8' },
     { turn: 'dealer', deck: 'H10,C7,D10,S7' },
