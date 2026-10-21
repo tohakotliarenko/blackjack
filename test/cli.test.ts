@@ -47,9 +47,24 @@ describe('runCli', () => {
   it.each([
     { name: 'defaults', args: [], expectedUrl: undefined, playerName: undefined },
     { name: 'custom URL', args: [url], expectedUrl: url, playerName: undefined },
-    { name: 'name with default URL', args: ['--name', 'Alex Smith'], expectedUrl: undefined, playerName: 'Alex Smith' },
-    { name: 'name before URL', args: ['--name', 'Zoë 王', url], expectedUrl: url, playerName: 'Zoë 王' },
-    { name: 'trimmed name after URL', args: [url, '--name', '  Zoë 王  '], expectedUrl: url, playerName: 'Zoë 王' },
+    {
+      name: 'name with default URL',
+      args: ['--name', 'Alex Smith'],
+      expectedUrl: undefined,
+      playerName: 'Alex Smith',
+    },
+    {
+      name: 'name before URL',
+      args: ['--name', 'Zoë 王', url],
+      expectedUrl: url,
+      playerName: 'Zoë 王',
+    },
+    {
+      name: 'trimmed name after URL',
+      args: [url, '--name', '  Zoë 王  '],
+      expectedUrl: url,
+      playerName: 'Zoë 王',
+    },
   ])('runs the pipeline with $name', async ({ args, expectedUrl, playerName }) => {
     expect(await runCli(args)).toBe(0);
     expect(fetchDeck).toHaveBeenCalledExactlyOnceWith(expectedUrl);
@@ -92,16 +107,22 @@ describe('runCli', () => {
     expect(formatGameResult).not.toHaveBeenCalled();
   });
 
-  it.each(['fetching', 'gameplay'])('reports a failure during %s without partial output', async stage => {
-    const error = new Error('Something went wrong.');
-    if (stage === 'fetching') vi.mocked(fetchDeck).mockRejectedValue(error);
-    else vi.mocked(playGame).mockImplementation(() => { throw error; });
+  it.each(['fetching', 'gameplay'])(
+    'reports a failure during %s without partial output',
+    async stage => {
+      const error = new Error('Something went wrong.');
+      if (stage === 'fetching') vi.mocked(fetchDeck).mockRejectedValue(error);
+      else
+        vi.mocked(playGame).mockImplementation(() => {
+          throw error;
+        });
 
-    expect(await runCli([url])).toBe(1);
-    expect(stdout).toBe('');
-    expect(stderr).toBe('Error: Something went wrong.\n');
-    expect(fetchDeck).toHaveBeenCalledExactlyOnceWith(url);
-    if (stage === 'fetching') expect(playGame).not.toHaveBeenCalled();
-    expect(formatGameResult).not.toHaveBeenCalled();
-  });
+      expect(await runCli([url])).toBe(1);
+      expect(stdout).toBe('');
+      expect(stderr).toBe('Error: Something went wrong.\n');
+      expect(fetchDeck).toHaveBeenCalledExactlyOnceWith(url);
+      if (stage === 'fetching') expect(playGame).not.toHaveBeenCalled();
+      expect(formatGameResult).not.toHaveBeenCalled();
+    },
+  );
 });

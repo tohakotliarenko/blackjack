@@ -3,13 +3,18 @@ import { CARD_SUITS, CARD_VALUES, type Card } from './card.js';
 const MIN_GAME_CARDS = 4;
 
 function isCard(card: unknown): card is Card {
-  return typeof card === 'object' && card !== null
-    && 'suit' in card && CARD_SUITS.some(suit => suit === card.suit)
-    && 'value' in card && CARD_VALUES.some(value => value === card.value);
+  return (
+    typeof card === 'object' &&
+    card !== null &&
+    'suit' in card &&
+    CARD_SUITS.some(suit => suit === card.suit) &&
+    'value' in card &&
+    CARD_VALUES.some(value => value === card.value)
+  );
 }
 
 export async function fetchDeck(
-  url = 'https://sandbox.getunleash.io/blackjack/shuffle'
+  url = 'https://sandbox.getunleash.io/blackjack/shuffle',
 ): Promise<Card[]> {
   let parsedUrl: URL;
 
@@ -38,7 +43,7 @@ export async function fetchDeck(
     }
     throw new Error(
       `Failed to load deck: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error }
+      { cause: error },
     );
   }
 
@@ -47,7 +52,7 @@ export async function fetchDeck(
   }
 
   if (deck.length < MIN_GAME_CARDS) {
-    throw new Error("Not enough cards in the deck to start the game.");
+    throw new Error('Not enough cards in the deck to start the game.');
   }
 
   return deck;

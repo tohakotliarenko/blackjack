@@ -37,7 +37,11 @@ describe('fetchDeck', () => {
     { name: 'omitted URL', args: [], expectedUrl: defaultUrl },
     { name: 'undefined URL', args: [undefined], expectedUrl: defaultUrl },
     { name: 'custom HTTPS URL', args: [customUrl], expectedUrl: customUrl },
-    { name: 'custom HTTP URL', args: ['http://localhost/deck'], expectedUrl: 'http://localhost/deck' },
+    {
+      name: 'custom HTTP URL',
+      args: ['http://localhost/deck'],
+      expectedUrl: 'http://localhost/deck',
+    },
   ] satisfies { name: string; args: [string?]; expectedUrl: string }[])(
     'makes one GET for $name and preserves all suits, ranks and card order',
     async ({ args, expectedUrl }) => {
@@ -45,17 +49,23 @@ describe('fetchDeck', () => {
 
       expect(await fetchDeck(...args)).toEqual(deck);
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenCalledWith(expectedUrl, expect.objectContaining({
-        signal: expect.any(AbortSignal),
-      }));
+      expect(fetchMock).toHaveBeenCalledWith(
+        expectedUrl,
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+        }),
+      );
       expect(fetchMock.mock.calls[0][1]?.method ?? 'GET').toBe('GET');
-    }
+    },
   );
 
   it.each([
     { name: 'four-card deck', data: deck.slice(0, 4) },
     { name: 'duplicate cards', data: [card, card, card, card] },
-    { name: 'extra card fields', data: [...deck.slice(0, 3), { ...card, label: 'five of hearts' }] },
+    {
+      name: 'extra card fields',
+      data: [...deck.slice(0, 3), { ...card, label: 'five of hearts' }],
+    },
   ])('accepts $name', async ({ data }) => {
     fetchMock.mockResolvedValue(Response.json(data));
 
@@ -70,32 +80,36 @@ describe('fetchDeck', () => {
     ];
     fetchMock.mockResolvedValue(Response.json(initialDeck.slice(0, length)));
 
-    await expect(fetchDeck(customUrl)).rejects.toThrow('Not enough cards in the deck to start the game.');
+    await expect(fetchDeck(customUrl)).rejects.toThrow(
+      'Not enough cards in the deck to start the game.',
+    );
   });
 
-  it.each(['', 'not a URL', '/deck'])(
-    'rejects malformed URL %j before fetching', async url => {
-      await expect(fetchDeck(url)).rejects.toThrow(`Invalid deck URL: ${url}`);
-      expect(fetchMock).not.toHaveBeenCalled();
-    }
-  );
+  it.each(['', 'not a URL', '/deck'])('rejects malformed URL %j before fetching', async url => {
+    await expect(fetchDeck(url)).rejects.toThrow(`Invalid deck URL: ${url}`);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
   it.each(['ftp://example.com/deck', 'file:///deck.json'])(
-    'rejects unsupported protocol in %j before fetching', async url => {
+    'rejects unsupported protocol in %j before fetching',
+    async url => {
       await expect(fetchDeck(url)).rejects.toThrow('Deck URL must use HTTP or HTTPS.');
       expect(fetchMock).not.toHaveBeenCalled();
-    }
+    },
   );
 
-  it.each([404, 429, 500, 503])('rejects HTTP %i without reading JSON or retrying', async status => {
-    const response = new Response('not JSON', { status });
-    const readBody = vi.spyOn(response, 'json');
-    fetchMock.mockResolvedValue(response);
+  it.each([404, 429, 500, 503])(
+    'rejects HTTP %i without reading JSON or retrying',
+    async status => {
+      const response = new Response('not JSON', { status });
+      const readBody = vi.spyOn(response, 'json');
+      fetchMock.mockResolvedValue(response);
 
-    await expect(fetchDeck(customUrl)).rejects.toThrow(`HTTP ${status}`);
-    expect(readBody).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+      await expect(fetchDeck(customUrl)).rejects.toThrow(`HTTP ${status}`);
+      expect(readBody).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each([
     { name: 'DNS failure', code: 'ENOTFOUND' },
@@ -107,7 +121,8 @@ describe('fetchDeck', () => {
     fetchMock.mockRejectedValue(error);
 
     await expect(fetchDeck(customUrl)).rejects.toMatchObject({
-      message: 'Failed to load deck: fetch failed', cause: error,
+      message: 'Failed to load deck: fetch failed',
+      cause: error,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(customUrl, expect.anything());
@@ -120,18 +135,23 @@ describe('fetchDeck', () => {
     fetchMock.mockResolvedValue(response);
 
     await expect(fetchDeck(customUrl)).rejects.toMatchObject({
-      message: 'Failed to load deck: terminated', cause: error,
+      message: 'Failed to load deck: terminated',
+      cause: error,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it.each(['before headers', 'while reading the body'])(
-    'times out after 10 seconds %s', async stage => {
+    'times out after 10 seconds %s',
+    async stage => {
       const controller = new AbortController();
       const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
-      const waitForAbort = () => new Promise<never>((_, reject) => {
-        controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
-      });
+      const waitForAbort = () =>
+        new Promise<never>((_, reject) => {
+          controller.signal.addEventListener('abort', () => reject(controller.signal.reason), {
+            once: true,
+          });
+        });
       const readBody = vi.fn(waitForAbort);
       fetchMock.mockImplementation((_url, options) => {
         expect(options?.signal).toBe(controller.signal);
@@ -143,7 +163,8 @@ describe('fetchDeck', () => {
 
       const pending = fetchDeck(customUrl);
       const rejection = expect(pending).rejects.toMatchObject({
-        message: 'Deck request timed out after 10 seconds.', cause: expect.any(DOMException),
+        message: 'Deck request timed out after 10 seconds.',
+        cause: expect.any(DOMException),
       });
       // Let the resolved headers reach the body reader before triggering its abort.
       await Promise.resolve();
@@ -153,14 +174,15 @@ describe('fetchDeck', () => {
       expect(timeout).toHaveBeenCalledWith(10_000);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(readBody).toHaveBeenCalledTimes(stage === 'before headers' ? 0 : 1);
-    }
+    },
   );
 
   it.each(['{', ''])('rejects malformed JSON %j', async body => {
     fetchMock.mockResolvedValue(new Response(body));
 
     await expect(fetchDeck(customUrl)).rejects.toMatchObject({
-      message: 'Deck response is not valid JSON.', cause: expect.any(SyntaxError),
+      message: 'Deck response is not valid JSON.',
+      cause: expect.any(SyntaxError),
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -186,6 +208,8 @@ describe('fetchDeck', () => {
   ])('rejects a deck with $name', async ({ data }) => {
     fetchMock.mockResolvedValue(Response.json(data));
 
-    await expect(fetchDeck(customUrl)).rejects.toThrow('Deck response must be an array of valid cards.');
+    await expect(fetchDeck(customUrl)).rejects.toThrow(
+      'Deck response must be an array of valid cards.',
+    );
   });
 });

@@ -185,8 +185,19 @@ describe('playGame', () => {
 
 describe('getCardScore', () => {
   it.each<[CardValue, number]>([
-    ['2', 2], ['3', 3], ['4', 4], ['5', 5], ['6', 6], ['7', 7],
-    ['8', 8], ['9', 9], ['10', 10], ['J', 10], ['Q', 10], ['K', 10], ['A', 11],
+    ['2', 2],
+    ['3', 3],
+    ['4', 4],
+    ['5', 5],
+    ['6', 6],
+    ['7', 7],
+    ['8', 8],
+    ['9', 9],
+    ['10', 10],
+    ['J', 10],
+    ['Q', 10],
+    ['K', 10],
+    ['A', 11],
   ])('%s is worth %i points', (value, score) => {
     expect(getCardScore(value)).toBe(score);
   });
@@ -262,23 +273,35 @@ describe('playerTurn', () => {
   it.each([
     {
       name: 'hits below 17 and stops above the threshold',
-      initial: 'H10,C6', deck: 'H2,CJ', score: 18,
-      final: 'H10,C6,H2', unused: 'CJ',
+      initial: 'H10,C6',
+      deck: 'H2,CJ',
+      score: 18,
+      final: 'H10,C6,H2',
+      unused: 'CJ',
     },
     {
       name: 'takes multiple hits and stops at exactly 17',
-      initial: 'H2,C3', deck: 'H2,H10,S4', score: 17,
-      final: 'H2,C3,H2,H10', unused: 'S4',
+      initial: 'H2,C3',
+      deck: 'H2,H10,S4',
+      score: 17,
+      final: 'H2,C3,H2,H10',
+      unused: 'S4',
     },
     {
       name: 'stops immediately after busting',
-      initial: 'H10,C6', deck: 'HJ,S4', score: 26,
-      final: 'H10,C6,HJ', unused: 'S4',
+      initial: 'H10,C6',
+      deck: 'HJ,S4',
+      score: 26,
+      final: 'H10,C6,HJ',
+      unused: 'S4',
     },
     {
       name: 'does not draw when already bust with two Aces',
-      initial: 'HA,CA', deck: 'S4', score: 22,
-      final: 'HA,CA', unused: 'S4',
+      initial: 'HA,CA',
+      deck: 'S4',
+      score: 22,
+      final: 'HA,CA',
+      unused: 'S4',
     },
   ])('$name', scenario => {
     const player = { cards: cards(scenario.initial) };
@@ -307,29 +330,49 @@ describe('playerTurn', () => {
 describe('dealerTurn', () => {
   it.each([
     {
-      name: 'stands when already strictly ahead', playerScore: 17,
-      initial: 'H10,C8', deck: 'H2', score: 18,
-      final: 'H10,C8', unused: 'H2',
+      name: 'stands when already strictly ahead',
+      playerScore: 17,
+      initial: 'H10,C8',
+      deck: 'H2',
+      score: 18,
+      final: 'H10,C8',
+      unused: 'H2',
     },
     {
-      name: 'draws on an initial tie and stops on bust', playerScore: 17,
-      initial: 'S9,D8', deck: 'CJ,HA', score: 27,
-      final: 'S9,D8,CJ', unused: 'HA',
+      name: 'draws on an initial tie and stops on bust',
+      playerScore: 17,
+      initial: 'S9,D8',
+      deck: 'CJ,HA',
+      score: 27,
+      final: 'S9,D8,CJ',
+      unused: 'HA',
     },
     {
-      name: 'draws through a tie until strictly ahead', playerScore: 18,
-      initial: 'S10,D6', deck: 'H2,C2,SA', score: 20,
-      final: 'S10,D6,H2,C2', unused: 'SA',
+      name: 'draws through a tie until strictly ahead',
+      playerScore: 18,
+      initial: 'S10,D6',
+      deck: 'H2,C2,SA',
+      score: 20,
+      final: 'S10,D6,H2,C2',
+      unused: 'SA',
     },
     {
-      name: 'draws again after reaching a three-card tie at 21', playerScore: 21,
-      initial: 'D10,S7', deck: 'C4,D2,H3', score: 23,
-      final: 'D10,S7,C4,D2', unused: 'H3',
+      name: 'draws again after reaching a three-card tie at 21',
+      playerScore: 21,
+      initial: 'D10,S7',
+      deck: 'C4,D2,H3',
+      score: 23,
+      final: 'D10,S7,C4,D2',
+      unused: 'H3',
     },
     {
-      name: 'does not draw when initially bust', playerScore: 18,
-      initial: 'DA,SA', deck: 'H2', score: 22,
-      final: 'DA,SA', unused: 'H2',
+      name: 'does not draw when initially bust',
+      playerScore: 18,
+      initial: 'DA,SA',
+      deck: 'H2',
+      score: 22,
+      final: 'DA,SA',
+      unused: 'H2',
     },
   ])('$name', scenario => {
     const dealer = { cards: cards(scenario.initial) };
@@ -357,8 +400,9 @@ describe('createResult', () => {
     const player = { cards: cards(expected.player.cards) };
     const dealer = { cards: cards(expected.dealer.cards) };
 
-    expect(createResult('dealer', player, dealer, playerScore, dealerScore))
-      .toEqual(expectedResult(expected));
+    expect(createResult('dealer', player, dealer, playerScore, dealerScore)).toEqual(
+      expectedResult(expected),
+    );
   });
 
   it('keeps result hands independent of later changes to the working arrays', () => {

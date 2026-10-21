@@ -16,13 +16,16 @@
     "test": "npm run build && vitest run",
     "test:watch": "vitest --exclude test/integration.test.ts",
     "test:coverage": "npm run build && vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
     "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.0",

@@ -17,24 +17,34 @@ function cards(deck: string): Card[] {
 
 const fixtures = [
   {
-    id: 'A', name: 'Player bust', deck: 'H10,C6,D8,S7,HJ',
+    id: 'A',
+    name: 'Player bust',
+    deck: 'H10,C6,D8,S7,HJ',
     output: 'Winner: Dealer\nDealer | 15 | D8,S7\nPlayer | 26 | H10,C6,HJ\n',
   },
   {
-    id: 'B', name: 'Dealer bust', deck: 'H10,C7,S9,D8,CJ',
+    id: 'B',
+    name: 'Dealer bust',
+    deck: 'H10,C7,S9,D8,CJ',
     output: 'Winner: Player\nDealer | 27 | S9,D8,CJ\nPlayer | 17 | H10,C7\n',
   },
   {
-    id: 'C', name: 'both natural Blackjacks', deck: 'HA,S10,DA,CK',
+    id: 'C',
+    name: 'both natural Blackjacks',
+    deck: 'HA,S10,DA,CK',
     output: 'Winner: Dealer\nDealer | 21 | DA,CK\nPlayer | 21 | HA,S10\n',
   },
   {
-    id: 'D', name: 'three-card 21 and dealer tie', deck: 'H10,C6,D10,S7,H5,C4,D2',
+    id: 'D',
+    name: 'three-card 21 and dealer tie',
+    deck: 'H10,C6,D10,S7,H5,C4,D2',
     output: 'Winner: Player\nDealer | 23 | D10,S7,C4,D2\nPlayer | 21 | H10,C6,H5\n',
   },
 ];
 const routes: Record<string, { status?: number; body: string }> = {
-  ...Object.fromEntries(fixtures.map(({ id, deck }) => [`/${id}`, { body: JSON.stringify(cards(deck)) }])),
+  ...Object.fromEntries(
+    fixtures.map(({ id, deck }) => [`/${id}`, { body: JSON.stringify(cards(deck)) }]),
+  ),
   '/http-error': { status: 500, body: 'unavailable' },
   '/invalid-json': { body: '{' },
   '/invalid-cards': { body: JSON.stringify([{ suit: 'HEARTS', value: 5 }, ...cards('C6,D8,S7')]) },
@@ -56,23 +66,33 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
-beforeEach(() => { requests = []; });
+beforeEach(() => {
+  requests = [];
+});
 
 afterAll(async () => {
   if (!server.listening) return;
   server.closeAllConnections();
   await new Promise<void>((resolve, reject) => {
-    server.close(error => error ? reject(error) : resolve());
+    server.close(error => (error ? reject(error) : resolve()));
   });
 });
 
 function run(args: string[], command = process.execPath) {
   return new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve, reject) => {
-    const child = spawn(command, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], timeout: 4_000 });
+    const child = spawn(command, args, {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 4_000,
+    });
     let stdout = '';
     let stderr = '';
-    child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk; });
-    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+    child.stdout.setEncoding('utf8').on('data', chunk => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding('utf8').on('data', chunk => {
+      stderr += chunk;
+    });
     child.on('error', reject);
     child.on('close', (code, signal) => {
       if (signal) reject(new Error(`CLI terminated by ${signal}.`));
@@ -84,28 +104,35 @@ function run(args: string[], command = process.execPath) {
 describe('compiled CLI', () => {
   it.each(fixtures)('plays fixture $id: $name', async ({ id, output }) => {
     expect(await run(['dist/cli.js', `${baseUrl}/${id}`])).toEqual({
-      stdout: output, stderr: '', code: 0,
+      stdout: output,
+      stderr: '',
+      code: 0,
     });
     expect(requests).toEqual([`GET /${id}`]);
   });
 
   it.each([
     {
-      id: 'A', position: 'before',
+      id: 'A',
+      position: 'before',
       output: 'Winner: Dealer\nDealer | 15 | D8,S7\nZoë 王 | 26 | H10,C6,HJ\n',
     },
     {
-      id: 'D', position: 'after',
+      id: 'D',
+      position: 'after',
       output: 'Winner: Zoë 王\nDealer | 23 | D10,S7,C4,D2\nZoë 王 | 21 | H10,C6,H5\n',
     },
-  ])('uses a trimmed Unicode name $position the URL for fixture $id', async ({ id, position, output }) => {
-    const url = `${baseUrl}/${id}`;
-    const name = ['--name', '  Zoë 王  '];
-    const args = position === 'before' ? [...name, url] : [url, ...name];
+  ])(
+    'uses a trimmed Unicode name $position the URL for fixture $id',
+    async ({ id, position, output }) => {
+      const url = `${baseUrl}/${id}`;
+      const name = ['--name', '  Zoë 王  '];
+      const args = position === 'before' ? [...name, url] : [url, ...name];
 
-    expect(await run(['dist/cli.js', ...args])).toEqual({ stdout: output, stderr: '', code: 0 });
-    expect(requests).toEqual([`GET /${id}`]);
-  });
+      expect(await run(['dist/cli.js', ...args])).toEqual({ stdout: output, stderr: '', code: 0 });
+      expect(requests).toEqual([`GET /${id}`]);
+    },
+  );
 
   it.each(['-h', '--help'])('prints %s without requesting a deck', async flag => {
     const result = await run(['dist/cli.js', `${baseUrl}/A`, flag]);
@@ -158,11 +185,15 @@ describe('compiled CLI', () => {
   });
 
   it('runs through npm --silent start with a custom name', async () => {
-    const result = await run(['--silent', 'start', '--', `${baseUrl}/D`, '--name', 'Alex Smith'], 'npm');
+    const result = await run(
+      ['--silent', 'start', '--', `${baseUrl}/D`, '--name', 'Alex Smith'],
+      'npm',
+    );
 
     expect(result).toEqual({
       stdout: 'Winner: Alex Smith\nDealer | 23 | D10,S7,C4,D2\nAlex Smith | 21 | H10,C6,H5\n',
-      stderr: '', code: 0,
+      stderr: '',
+      code: 0,
     });
     expect(requests).toEqual(['GET /D']);
   });
