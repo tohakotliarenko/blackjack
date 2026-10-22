@@ -5,7 +5,7 @@ function formatCards(cards: readonly Card[]): string {
   return cards.map(card => `${card.suit[0]}${card.value}`).join(',');
 }
 
-export function formatGameResult(result: GameResult, playerName = 'Player'): string {
+export function formatGameResult(result: GameResult, playerName: string): string {
   const winnerName = result.winner === 'player' ? playerName : 'Dealer';
 
   return [

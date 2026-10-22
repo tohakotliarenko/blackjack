@@ -13,9 +13,7 @@ function isCard(card: unknown): card is Card {
   );
 }
 
-export async function fetchDeck(
-  url = 'https://sandbox.getunleash.io/blackjack/shuffle',
-): Promise<Card[]> {
+export async function fetchDeck(url: string): Promise<Card[]> {
   let parsedUrl: URL;
 
   try {

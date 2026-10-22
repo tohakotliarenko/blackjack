@@ -15,7 +15,7 @@ function hand(score: number, codes: string): GameResult['player'] {
 
 const cases: { name: string; result: GameResult; expected: string }[] = [
   {
-    name: 'dealer bust with the default player name',
+    name: 'dealer bust',
     result: {
       winner: 'player',
       dealer: hand(27, 'S7,S10,CJ'),
@@ -26,7 +26,7 @@ Dealer | 27 | S7,S10,CJ
 Player | 19 | D2,H2,C6,H9`,
   },
   {
-    name: 'player bust with the default player name',
+    name: 'player bust',
     result: {
       winner: 'dealer',
       dealer: hand(15, 'D8,S7'),
@@ -64,7 +64,7 @@ describe('formatGameResult', () => {
   // Together these fixtures cover every suit and rank. Exact strings also
   // check separators, line order and the absence of a trailing newline.
   it.each(cases)('formats $name', ({ result, expected }) => {
-    expect(formatGameResult(result)).toBe(expected);
+    expect(formatGameResult(result, 'Player')).toBe(expected);
   });
 
   it.each([
@@ -93,7 +93,7 @@ Zoë 王 | 26 | H10,C6,HQ`,
       player: { ...cases[0].result.player, score: 20 },
     };
 
-    expect(formatGameResult(result)).toBe(`Winner: Player
+    expect(formatGameResult(result, 'Player')).toBe(`Winner: Player
 Dealer | 28 | S7,S10,CJ
 Player | 20 | D2,H2,C6,H9`);
   });
@@ -108,8 +108,8 @@ Player | 20 | D2,H2,C6,H9`);
     }
     Object.freeze(result);
 
-    expect(formatGameResult(result)).toBe(cases[0].expected);
-    expect(formatGameResult(result)).toBe(cases[0].expected);
+    expect(formatGameResult(result, 'Player')).toBe(cases[0].expected);
+    expect(formatGameResult(result, 'Player')).toBe(cases[0].expected);
     expect(result).toEqual(original);
   });
 });

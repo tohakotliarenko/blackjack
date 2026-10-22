@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Card } from '../src/card.js';
 import { fetchDeck } from '../src/deck.js';
 
-const defaultUrl = 'https://sandbox.getunleash.io/blackjack/shuffle';
 const customUrl = 'https://example.com/deck';
 const card: Card = { suit: 'HEARTS', value: '5' };
 const deck: Card[] = [
@@ -33,24 +32,15 @@ afterEach(() => {
 });
 
 describe('fetchDeck', () => {
-  it.each([
-    { name: 'omitted URL', args: [], expectedUrl: defaultUrl },
-    { name: 'undefined URL', args: [undefined], expectedUrl: defaultUrl },
-    { name: 'custom HTTPS URL', args: [customUrl], expectedUrl: customUrl },
-    {
-      name: 'custom HTTP URL',
-      args: ['http://localhost/deck'],
-      expectedUrl: 'http://localhost/deck',
-    },
-  ] satisfies { name: string; args: [string?]; expectedUrl: string }[])(
-    'makes one GET for $name and preserves all suits, ranks and card order',
-    async ({ args, expectedUrl }) => {
+  it.each([customUrl, 'http://localhost/deck'])(
+    'makes one GET to %s and preserves all suits, ranks and card order',
+    async url => {
       fetchMock.mockResolvedValue(Response.json(deck));
 
-      expect(await fetchDeck(...args)).toEqual(deck);
+      expect(await fetchDeck(url)).toEqual(deck);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock).toHaveBeenCalledWith(
-        expectedUrl,
+        url,
         expect.objectContaining({
           signal: expect.any(AbortSignal),
         }),

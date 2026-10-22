@@ -13,6 +13,9 @@ deck-url       HTTP(S) endpoint returning a JSON deck.
 
 Plays one round automatically, without interactive input.`;
 
+const DEFAULT_DECK_URL = 'https://sandbox.getunleash.io/blackjack/shuffle';
+const DEFAULT_PLAYER_NAME = 'Player';
+
 export async function runCli(args: string[]): Promise<number> {
   try {
     const { values, positionals } = parseArgs({
@@ -37,10 +40,11 @@ export async function runCli(args: string[]): Promise<number> {
     if (name !== undefined && /[\p{Cc}\p{Zl}\p{Zp}|]/u.test(name)) {
       throw new Error('Player name must not contain control characters, line breaks or "|".');
     }
-    const playerName = name?.trim();
+    const playerName = name?.trim() ?? DEFAULT_PLAYER_NAME;
     if (playerName === '') throw new Error('Player name must not be empty.');
 
-    const deck = await fetchDeck(positionals[0]);
+    const deckUrl = positionals[0] ?? DEFAULT_DECK_URL;
+    const deck = await fetchDeck(deckUrl);
     const result = playGame(deck);
     process.stdout.write(`${formatGameResult(result, playerName)}\n`);
     return 0;

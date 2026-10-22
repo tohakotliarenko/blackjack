@@ -10,6 +10,7 @@ vi.mock('../src/formatter.js');
 vi.mock('../src/game.js');
 
 const url = 'https://example.com/deck';
+const defaultUrl = 'https://sandbox.getunleash.io/blackjack/shuffle';
 const deck: Card[] = [
   { suit: 'HEARTS', value: 'A' },
   { suit: 'SPADES', value: '10' },
@@ -45,12 +46,12 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('runCli', () => {
   it.each([
-    { name: 'defaults', args: [], expectedUrl: undefined, playerName: undefined },
-    { name: 'custom URL', args: [url], expectedUrl: url, playerName: undefined },
+    { name: 'defaults', args: [], expectedUrl: defaultUrl, playerName: 'Player' },
+    { name: 'custom URL', args: [url], expectedUrl: url, playerName: 'Player' },
     {
       name: 'name with default URL',
       args: ['--name', 'Alex Smith'],
-      expectedUrl: undefined,
+      expectedUrl: defaultUrl,
       playerName: 'Alex Smith',
     },
     {
