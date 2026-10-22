@@ -32,11 +32,11 @@ node dist/cli.js --help
 ```sh
 npm run dev -- --name "Alex Smith" # Run TypeScript without building
 
-npm test                          # Build and run unit/integration tests
+npm test                           # Build and run unit/integration tests
 
-npm run check                     # Typecheck, lint, build and test
+npm run check                      # Typecheck, lint, build and test
 
-npm run test:coverage             # Run tests with coverage
+npm run test:coverage              # Run tests with coverage
 ```
 
 `src/` contains the CLI, deck provider, game logic and formatter. `test/` contains
