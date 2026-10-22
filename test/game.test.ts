@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { CardValue } from '../src/card.js';
 import {
   calculateScores,
-  checkBlackjack,
   createResult,
   dealerTurn,
   drawCard,
@@ -11,6 +10,7 @@ import {
   isBlackjack,
   playerTurn,
   playGame,
+  resolveInitialBlackjack,
   type GameResult,
 } from '../src/game.js';
 
@@ -253,14 +253,14 @@ describe('isBlackjack', () => {
   });
 });
 
-describe('checkBlackjack', () => {
+describe('resolveInitialBlackjack', () => {
   // Natural Blackjack outcomes are covered by playGame tests via naturalCases.
 
   it('leaves the round unresolved when neither initial hand has Blackjack', () => {
     const player = { cards: cards('H10,C7') };
     const dealer = { cards: cards('S10,D8') };
 
-    expect(checkBlackjack(player, dealer)).toBeUndefined();
+    expect(resolveInitialBlackjack(player, dealer)).toBeUndefined();
   });
 });
 

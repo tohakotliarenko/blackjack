@@ -25,11 +25,11 @@ const CARD_SCORE_MAP: Partial<Record<CardValue, number>> = {
   A: 11,
 };
 
-export function playGame(deck: readonly Card[]) {
+export function playGame(deck: readonly Card[]): GameResult {
   const remainingDeck = [...deck];
   const { player, dealer } = initialDraw(remainingDeck);
 
-  const blackjackResult = checkBlackjack(player, dealer);
+  const blackjackResult = resolveInitialBlackjack(player, dealer);
 
   if (blackjackResult) return blackjackResult;
 
@@ -78,7 +78,7 @@ export function isBlackjack(score: number): boolean {
   return score === MAX_PLAYER_SCORE;
 }
 
-export function checkBlackjack(player: Player, dealer: Player): GameResult | void {
+export function resolveInitialBlackjack(player: Player, dealer: Player): GameResult | void {
   const playerScore = calculateScores(player.cards);
   const dealerScore = calculateScores(dealer.cards);
 
